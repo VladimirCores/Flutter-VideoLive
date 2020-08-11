@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>215233215465-kloc6lf17tf9ce2q3gibj9fptnuabosf.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.215233215465-kloc6lf17tf9ce2q3gibj9fptnuabosf</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>215233215465-7tcp3andaa1a1bgdakiqkojin1vme4gq.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyD10JN88pxvAItpoa2PfI9g4JuSx07-HDA</string>
+	<key>GCM_SENDER_ID</key>
+	<string>215233215465</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>webrtc.flutter.videolive</string>
+	<key>PROJECT_ID</key>
+	<string>flutterrtc</string>
+	<key>STORAGE_BUCKET</key>
+	<string>flutterrtc.appspot.com</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:215233215465:ios:9c48dca5e1dd1b593ca978</string>
+	<key>DATABASE_URL</key>
+	<string>https://flutterrtc.firebaseio.com</string>
+</dict>
+</plist>
