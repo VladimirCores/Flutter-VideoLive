@@ -1,6 +1,6 @@
 {
-    "name": "flutter_video_live",
-    "short_name": "flutter_video_live",
+    "name": "flutter_videolive",
+    "short_name": "flutter_videolive",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

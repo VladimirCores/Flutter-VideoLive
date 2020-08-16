@@ -1,4 +1,4 @@
-# flutter_video_live
+# flutter_videolive
 
 A new Flutter application.
 

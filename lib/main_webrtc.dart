@@ -1,15 +1,27 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_videolive/SelectableWidget.dart';
 import 'package:flutter_webrtc/webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
 
 Map<String, dynamic> _iceServers = {
   'iceServers': [
     {'url': 'stun:stun1.l.google.com:19302'},
     {'url': 'stun:stun2.l.google.com:19302'},
+    // TURN SERVER: http://numb.viagenie.ca/
+//    {
+//      'url': 'turn:numb.viagenie.ca',
+//      'username': '****@gmail.com',
+//      'credential': '****'
+//    }
   ]
 };
+
+const MASTER_ICE_COLLECTION = 'callerCandidates';
+const CLIENT_ICE_COLLECTION = 'calleeCandidates';
+const PEERS_COLLECTION = 'peers';
 
 final Map<String, dynamic> _mediaStreamConstraints = {
   'audio': true,
@@ -24,16 +36,11 @@ final Map<String, dynamic> _mediaStreamConstraints = {
   }
 };
 
-CollectionReference _roomsCollectionRef;
+CollectionReference _roomsColRef;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-//  await Firestore.instance.settings(
-//      host: "127.0.0.1:6006",
-//      sslEnabled: false,
-//      persistenceEnabled: false
-//  );
-  _roomsCollectionRef = Firestore.instance.collection('rooms');
+  _roomsColRef = Firestore.instance.collection('rooms');
   runApp(LiveVideoApp());
 }
 
@@ -47,12 +54,13 @@ class _LiveVideoAppState extends State<LiveVideoApp> {
   String _selectedRoomID;
   bool _startConnect = false;
 
-  var style = TextStyle(color: Colors.white, fontSize: 24.0);
+  var style = TextStyle(color: Colors.black, fontSize: 24.0);
 
   void onSelected(String value) {
     print('Selected $value');
-    if (_selectedRoomID != value)
+    setState(() {
       _selectedRoomID = value;
+    });
   }
 
   @override
@@ -61,27 +69,20 @@ class _LiveVideoAppState extends State<LiveVideoApp> {
       title: 'Welcome to Flutter',
       home: Scaffold(body: _startConnect ? VideoLive(reInit:reInit, roomID:_selectedRoomID) :
         StreamBuilder<QuerySnapshot>(
-          stream: _roomsCollectionRef.snapshots(),
+          stream: _roomsColRef.snapshots(),
           builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-            if (snapshot.hasError) {
-              return Text("Something went wrong");
-            }
-
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Text("Loading");
-            }
-
-            if (!snapshot.hasData) return Text("No Rooms", style: style);
+            if (snapshot.hasError) { return Text("Something went wrong"); }
+            if (snapshot.connectionState == ConnectionState.waiting) { return Text("Loading"); }
+            if (!snapshot.hasData || snapshot.data.documents.length == 0) return Text("No Rooms", style: style);
 
             var docs = snapshot.data.documents;
             return new ListView.builder(
               itemCount: docs.length,
               itemBuilder: (context, index) {
-                return new SelectableWidget(
-                  new SelectableWidgetViewModel(
+                return SelectableWidget(SelectableWidgetViewModel(
                     docs[index].documentID,
                     onSelected: onSelected,
-                    isSelected: false,
+                    isSelected: docs[index].documentID == _selectedRoomID,
                     style: style
                   ),
                 );},
@@ -89,14 +90,22 @@ class _LiveVideoAppState extends State<LiveVideoApp> {
           }),
       floatingActionButton: FloatingActionButton(
         onPressed: reInit,
-        child: Icon(!_startConnect ? Icons.camera_enhance : Icons.close),
+        child: Icon(!_startConnect ? (_selectedRoomID != null ? Icons.camera_enhance : Icons.camera) : Icons.close),
         backgroundColor: _startConnect ? Colors.red : Colors.blue,
       ),));
   }
 
   void reInit() {
-    setState(() { _startConnect = !_startConnect; });
+    setState(() {
+      _selectedRoomID = null;
+      _startConnect = !_startConnect;
+    });
   }
+}
+
+class VideoLiveClient {
+  MediaStream stream;
+  String id;
 }
 
 class VideoLive extends StatefulWidget {
@@ -108,250 +117,238 @@ class VideoLive extends StatefulWidget {
 }
 
 class _VideoLiveState extends State<VideoLive> {
-  RTCVideoRenderer _rtcFullScreenRenderer;
-  RTCVideoRenderer _rtcPreviewRenderer;
+  RTCVideoRenderer _streamVideoRenderer;
 
-  RTCPeerConnection _rtcRemotePeerConnection;
+  final _peers = new Map<String, RTCPeerConnection>();
 
-  StreamSubscription _roomCollectionRefScream;
-  StreamSubscription _callerCandidatesCollectionScream;
-  StreamSubscription _calleeCandidatesCollectionScream;
-  StreamSubscription _roomReferenceSnapshotsScream;
-  DocumentReference _roomDocumentReference;
+  CollectionReference _peersColRef;
+  DocumentReference _roomDocRef;
 
-  MediaStream _remoteMediaStream;
-  MediaStream _localMediaStream;
+  MediaStream _mediaStream;
 
   bool _isReady = false;
-  bool _isUserRoomOwner = false;
-  bool _isPreviewReady = false;
-  bool _isFullScreenReady = false;
-  bool _isRemoteConfigSet = false;
+  bool _isRoomOwner = false;
+
+  @override initState() { super.initState(); initRenderers(); }
 
   initRenderers() async {
-    _rtcFullScreenRenderer = RTCVideoRenderer();
-    _rtcPreviewRenderer = RTCVideoRenderer();
+    _streamVideoRenderer = RTCVideoRenderer();
+    _streamVideoRenderer.onStateChanged = () {
+      print('_streamVideoRenderer.onStateChanged');
+      setState(() {});
+    };
+    _streamVideoRenderer.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
+    await _streamVideoRenderer.initialize();
+    _streamVideoRenderer.mirror = true;
 
-    await _rtcPreviewRenderer.initialize();
-    await _rtcFullScreenRenderer.initialize();
+    _isRoomOwner = widget.roomID == null;
+    print('> _isRoomOwner: $_isRoomOwner');
 
-    _rtcFullScreenRenderer.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
-
-    _isUserRoomOwner = widget.roomID == null;
-    _roomDocumentReference = !_isUserRoomOwner ?
-      _roomsCollectionRef.document(widget.roomID) : _roomsCollectionRef.document();
-
-    DocumentSnapshot room = await _roomDocumentReference.get();
-
-    final calleeCollection = _roomDocumentReference.collection('calleeCandidates');
-    final callerCollection = _roomDocumentReference.collection('callerCandidates');
-
-    _localMediaStream = await navigator.getUserMedia(_mediaStreamConstraints);
-    _rtcFullScreenRenderer.mirror = true;
-    _rtcPreviewRenderer.mirror = true;
+    _roomDocRef = !_isRoomOwner
+        ? _roomsColRef.document(widget.roomID)
+        : _roomsColRef.document(); // Create new room
 
     if (!mounted) return;
 
-    _rtcRemotePeerConnection = await createPeerConnection(_iceServers, {});
+    DocumentSnapshot roomDoc = await _roomDocRef.get();
 
-    _isRemoteConfigSet = false;
-    _isFullScreenReady = false;
-    _isPreviewReady = false;
+    if (_isRoomOwner)
+    {
+      roomDoc.reference.setData({ 'info': { 'name': DateTime.now().toString() } });
+      _peersColRef = _roomDocRef.collection(PEERS_COLLECTION);
 
-    print('_isUserRoomOwner $_isUserRoomOwner');
+      if (!mounted) return;
 
-    if (_isUserRoomOwner) {
-      _isFullScreenReady = true;
-      _rtcRemotePeerConnection.addStream(_localMediaStream);
+      _mediaStream = await navigator.getUserMedia(_mediaStreamConstraints);
 
-      _rtcRemotePeerConnection.onAddStream = (stream) {
-        print('> _rtcLocalVideoRenderer.onAddStream -> stream = ${stream.ownerTag == _localMediaStream.ownerTag}');
-        _rtcPreviewRenderer.srcObject = stream;
-      };
-      _rtcRemotePeerConnection.onRemoveStream = (stream) {
-        _rtcPreviewRenderer.srcObject = null;
-      };
-      _rtcRemotePeerConnection.onIceCandidate = (RTCIceCandidate candidate) {
-        callerCollection.add({
-          'sdpMLineIndex': candidate.sdpMlineIndex,
-          'sdpMid': candidate.sdpMid,
-          'candidate': candidate.candidate,
-        });
-      };
+      _peersColRef.snapshots().listen((QuerySnapshot peersSnapshot) {
+        peersSnapshot.documentChanges.forEach((DocumentChange peerChange) async {
+          if (peerChange.type == DocumentChangeType.modified) return;
 
-      RTCSessionDescription offer = await _rtcRemotePeerConnection.createOffer({});
+          final document = peerChange.document;
+          final peerID = document.documentID;
 
-      await _rtcRemotePeerConnection.setLocalDescription(offer);
+          print('> peers: change: ${peerChange.type} | id: ${document.documentID}');
 
-      final roomWithOffer = {
-        'offer': {
-          'type': offer.type,
-          'sdp': offer.sdp,
-        },
-      };
-      await _roomDocumentReference.setData(roomWithOffer);
+          if (peerChange.type == DocumentChangeType.removed && _peers.containsKey(peerID)) {
+            print('> peers: remove peer: $peerID');
+            _cleanPeerData(peerID);
+            _peers[peerID].close();
+            _peers.remove(peerID);
+          }
 
-      _roomReferenceSnapshotsScream = _roomDocumentReference.snapshots().listen((DocumentSnapshot snapshot) async {
-        final data = snapshot.data;
-        print('> roomReference.listen: has snapshot: ${snapshot.documentID}');
-        if (!_isRemoteConfigSet && data != null && data['answer'] != null) {
-          print('> roomReference.listen -> Got remote answer: ${data['answer']}');
-          final answer = data['answer'];
-          final rtcSessionDescription = RTCSessionDescription(answer['sdp'], answer['type']);
-          await _rtcRemotePeerConnection.setRemoteDescription(rtcSessionDescription);
-          _roomReferenceSnapshotsScream?.cancel();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (this.mounted) setState(() { _isRemoteConfigSet = true; });
-          });
-        }
-      });
-
-      _calleeCandidatesCollectionScream = calleeCollection.snapshots().listen((QuerySnapshot snapshot) {
-        print('> calleeCollection: snapshots -> snapshot.documents.length = ${snapshot.documents.length}');
-        snapshot.documentChanges.forEach((change) async {
-          if (change.type == DocumentChangeType.added) {
-            final candidateData = change.document.data;
-            print('> calleeCollection: snapshots -> DocumentChangeType.added = ${candidateData}');
-            final candidate = RTCIceCandidate(
-                candidateData['candidate'],
-                candidateData['sdpMid'].toString(),
-                candidateData['sdpMLineIndex']
-            );
-            _rtcRemotePeerConnection.addCandidate(candidate);
-            _calleeCandidatesCollectionScream?.cancel();
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (this.mounted) setState(() { _isPreviewReady = true; });
+          if (peerChange.type == DocumentChangeType.added && !_peers.containsKey(peerID)) {
+            print('====> start new registration');
+            final peerDocRef = _peersColRef.document(peerID);
+            print('> \t1. Create RTC connection client');
+            final peerConnection = await createPeerConnection(_iceServers, {});
+            print('> \t2. Save peerID ($peerID) in a collection');
+            _peers[peerID] = peerConnection;
+            print('> \t3. Add media stream');
+            peerConnection.addStream(_mediaStream);
+            print('> \t4.1. Listener on ICE candidates');
+            peerConnection.onIceCandidate = (RTCIceCandidate candidate) {
+              peerDocRef.collection(MASTER_ICE_COLLECTION).add({
+                'sdpMLineIndex': candidate.sdpMlineIndex,
+                'sdpMid': candidate.sdpMid,
+                'candidate': candidate.candidate,
+              });
+            };
+            print('> \t4.2. Setup listener for client ICE collection');
+            peerDocRef.collection(CLIENT_ICE_COLLECTION).snapshots().listen((QuerySnapshot iceClientSnapshot) {
+              iceClientSnapshot.documentChanges.forEach((DocumentChange iceChange) async {
+                if (iceChange.type == DocumentChangeType.added) {
+                  final candidateData = iceChange.document.data;
+                  print('> $CLIENT_ICE_COLLECTION: snapshots -> candidate added: $candidateData');
+                  final candidate = RTCIceCandidate(
+                      candidateData['candidate'],
+                      candidateData['sdpMid'],
+                      candidateData['sdpMLineIndex']
+                  );
+                  peerConnection.addCandidate(candidate);
+                }
+              });
+            });
+            print('> \t4.3. Setup listener for answer');
+            var unsubscribeForAnswerListener;
+            unsubscribeForAnswerListener = peerDocRef.snapshots().listen((DocumentSnapshot snapshot) async {
+              if (!snapshot.exists) { unsubscribeForAnswerListener.cancel(); return; }
+              final data = snapshot.data;
+              final answer = data['answer'];
+              print('> peerDocument.listen: has snapshot: ${snapshot.documentID}');
+              if (answer != null) {
+                print('> peerDocument.listen -> Got remote answer: $answer');
+                final rtcSessionDescription = RTCSessionDescription(answer['sdp'], answer['type']);
+                await peerConnection.setRemoteDescription(rtcSessionDescription);
+                unsubscribeForAnswerListener?.cancel();
+                unsubscribeForAnswerListener = null;
+              }
+            });
+            if (!mounted) return;
+            RTCSessionDescription offer = await peerConnection.createOffer({});
+            await peerConnection.setLocalDescription(offer);
+            await peerDocRef.updateData({
+              'offer': { 'type': offer.type, 'sdp': offer.sdp },
             });
           }
         });
       });
 
-      print('> _roomID: $widget.roomID');
+      _streamVideoRenderer.srcObject = _mediaStream;
 
     } else {
-      print('> existing _roomID: ${widget.roomID}');
-      print('> room.documentID: ${room.documentID}');
-      print('> roomSnapshot.exists: ${room.data}');
-      if (room.exists) {
+      if (roomDoc.exists)
+      {
+        _peersColRef = _roomDocRef.collection(PEERS_COLLECTION);
+        final peerDocRef = _peersColRef.document();
+        await peerDocRef.setData({ 'info': { 'name': DateTime.now().toString() }});
+        final peerID = peerDocRef.documentID;
 
-        final offer = room.data['offer'];
+        print('======= Join room: ${_roomDocRef.documentID}');
+        print('> 0. Peer created: $peerID');
 
-        _rtcPreviewRenderer.srcObject = _localMediaStream;
-        _isPreviewReady = true;
-
-        _rtcRemotePeerConnection.addStream(_localMediaStream);
-        _rtcRemotePeerConnection.onIceCandidate = (RTCIceCandidate candidate) {
-          print('> _rtcRemotePeerConnection.onIceCandidate -> candidate.sdpMlineIndex = ${candidate.sdpMlineIndex}');
-          calleeCollection.add({
-            'sdpMLineIndex': candidate.sdpMlineIndex,
-            'sdpMid': candidate.sdpMid,
-            'candidate': candidate.candidate,
-          });
-        };
-        _rtcRemotePeerConnection.onAddStream = (stream) {
-          print('> _rtcRemotePeerConnection.onAddStream -> stream = ${stream.ownerTag == _localMediaStream.ownerTag}');
-          _rtcFullScreenRenderer.srcObject = stream;
-        };
-        _rtcRemotePeerConnection.onRemoveStream = (stream) {
-          _rtcFullScreenRenderer.srcObject = null;
-        };
-
-        if (!mounted) return;
-        // 1. Register offer
-        RTCSessionDescription remote = RTCSessionDescription(offer['sdp'], offer['type']);
-        await _rtcRemotePeerConnection.setRemoteDescription(remote);
-
-        // 2. Register answer
-        RTCSessionDescription answer = await _rtcRemotePeerConnection.createAnswer({});
-        _rtcRemotePeerConnection.setLocalDescription(answer);
-
-        if (!mounted) return;
-        // 3. Send room answer
-        final roomWithAnswer = { 'answer': { 'type': answer.type, 'sdp': answer.sdp }};
-        await _roomDocumentReference.updateData(roomWithAnswer);
-
-        // 4. Listening for remote ICE candidates
-        _callerCandidatesCollectionScream = callerCollection.snapshots().listen((QuerySnapshot snapshot) {
-          print('> callerCandidates: snapshots -> snapshot.documents.length = ${snapshot.documents.length}');
-          snapshot.documentChanges.forEach((change) async {
-            if (change.type == DocumentChangeType.added) {
-              final candidateData = change.document.data;
-              print('> callerCandidates: snapshots -> DocumentChangeType.added = ${candidateData}');
+        peerDocRef.collection(MASTER_ICE_COLLECTION).snapshots().listen((QuerySnapshot iceMasterSnapshot) {
+          iceMasterSnapshot.documentChanges.forEach((DocumentChange iceMasterChange) async {
+            if (iceMasterChange.type == DocumentChangeType.added) {
+              final candidateData = iceMasterChange.document.data;
+              print('> $MASTER_ICE_COLLECTION: snapshots -> candidate added: $candidateData');
               final candidate = RTCIceCandidate(
                   candidateData['candidate'],
-                  candidateData['sdpMid'].toString(),
+                  candidateData['sdpMid'],
                   candidateData['sdpMLineIndex']
               );
-              _rtcRemotePeerConnection.addCandidate(candidate);
-              _callerCandidatesCollectionScream?.cancel();
-              setState(() { _isFullScreenReady = true; });
+              _peers[peerID].addCandidate(candidate);
             }
           });
+        });
+
+        var unsubscribePeerDocListener;
+        unsubscribePeerDocListener = peerDocRef.snapshots().listen((DocumentSnapshot peerDocSnapshot) async {
+          if (!peerDocSnapshot.exists) {
+            unsubscribePeerDocListener.cancel();
+            await _closeAll();
+            widget.reInit();
+            return;
+          }
+          final data = peerDocSnapshot.data;
+          final answer = data['answer'];
+          final offer = data['offer'];
+          print('> peerDocument.listen: has snapshot: ${peerDocSnapshot.documentID}');
+          print('> -> peer update: offer|answer (${offer!=null}|${answer!=null})');
+
+          if (offer != null && answer == null)
+          {
+            print('> \t1. Create peerConnection');
+            final peerConnection = await createPeerConnection(_iceServers, {});
+            print('> \t2. Save peerID ($peerID) in a collection');
+            _peers[peerID] = peerConnection;
+            print('> \t3. Listen for media tracks');
+            peerConnection.onAddStream = (stream) {
+              _mediaStream = stream;
+              _streamVideoRenderer.srcObject = stream;
+              print('>>> peerConnection.onAddStream');
+            };
+            peerConnection.onRemoveStream = (stream) {
+              _mediaStream?.dispose();
+              _mediaStream = null;
+              _streamVideoRenderer.srcObject = null;
+            };
+            print('> \t4. Listener on ICE candidates');
+            peerConnection.onIceCandidate = (RTCIceCandidate iceClientCandidate) {
+              peerDocRef.collection(CLIENT_ICE_COLLECTION).add({
+                'sdpMLineIndex': iceClientCandidate.sdpMlineIndex,
+                'sdpMid': iceClientCandidate.sdpMid,
+                'candidate': iceClientCandidate.candidate,
+              });
+            };
+            if (!mounted) return;
+            // 1. Register offer
+            print('> 5.1 Register offer: ${offer['type']}');
+            RTCSessionDescription remote = RTCSessionDescription(offer['sdp'], offer['type']);
+            await peerConnection.setRemoteDescription(remote);
+            if (!mounted) return;
+            // 2. Register answer
+            print('> 5.2 Answer created: $peerID');
+            RTCSessionDescription answer = await peerConnection.createAnswer({});
+            peerConnection.setLocalDescription(answer);
+            print('> 6. Post answer to the peer document');
+            await peerDocRef.updateData({
+              'answer': { 'type': answer.type, 'sdp': answer.sdp }});
+          }
         });
       }
     }
 
-    _roomCollectionRefScream = _roomsCollectionRef.snapshots().listen(
-      (QuerySnapshot snapshot) {
-        snapshot.documentChanges.forEach((change) async {
-          print('> change -> ${change.type} - ${change.document.documentID}');
-          if (change.type == DocumentChangeType.removed && change.document.documentID == _roomDocumentReference.documentID) {
-            _closeAll();
-            if (this.mounted) {
-              setState(() {});
-              widget.reInit();
-            }
-          }
-        });
-    });
-
+    print('> _roomID: ${_roomDocRef.documentID}');
     if (this.mounted) setState(() { _isReady = true; });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_rtcFullScreenRenderer == null || _rtcPreviewRenderer == null) return LinearProgressIndicator();
+    if (_streamVideoRenderer == null) return LinearProgressIndicator();
 
-    var fullscreenSize = Size(_rtcFullScreenRenderer?.width, _rtcFullScreenRenderer?.height);
-    var previewSize = Size(_rtcPreviewRenderer?.width, _rtcPreviewRenderer?.height);
+    var fullscreenSize = Size(_streamVideoRenderer?.width, _streamVideoRenderer?.height);
 
     final size = MediaQuery.of(context).size;
     final isRenderLandscape = fullscreenSize.width > fullscreenSize.height;
-    final isPreviewLandscape = previewSize.width > previewSize.height;
 
     fullscreenSize = _boxSizeOnLandscape(isRenderLandscape, fullscreenSize);
-    previewSize = _boxSizeOnLandscape(isPreviewLandscape, previewSize);
 
-    final previewBoxWidth = size.width * 0.3;
-    final previewBoxHeight = previewBoxWidth * previewSize.aspectRatio;
-
-    print('> RENDER ${_isFullScreenReady} ${_isPreviewReady} $fullscreenSize ${previewSize}');
+    print('> RENDER _isReady = $_isReady | $fullscreenSize');
 
     return Stack(
-      children: [ !(_isReady || _isFullScreenReady) ? Align(alignment: Alignment.center, child: CircularProgressIndicator()) :
+      children: [ Align(alignment: Alignment.center, child: !(_isReady) ? CircularProgressIndicator() :
         Container(width: size.width, height: size.height,
           child: FittedBox(fit: BoxFit.fitHeight,
             child: Container(width: fullscreenSize.width, height: fullscreenSize.height,
-              child: RotatedBox(quarterTurns: (isRenderLandscape && _isUserRoomOwner) ? 1 : 0,
-                child: RTCVideoView(_rtcFullScreenRenderer, key: UniqueKey()),
+              child: RotatedBox(quarterTurns: (isRenderLandscape && _isRoomOwner) ? 1 : 0,
+                child: RTCVideoView(_streamVideoRenderer, key: UniqueKey()),
               ),
             ),
           ),
-        ),
-        !_isPreviewReady ? Container() :
-        Padding(padding: EdgeInsets.all(16),
-          child: Align(alignment: Alignment.bottomLeft,
-            child: Container(width: previewBoxWidth, height: previewBoxHeight,
-                child: FittedBox( fit: BoxFit.fitHeight,
-                    child: Container( width: previewSize.width, height: previewSize.height,
-                        child: RotatedBox(quarterTurns: (isPreviewLandscape && !_isUserRoomOwner) ? 1 : 0,
-                            child: RTCVideoView(_rtcPreviewRenderer, key: UniqueKey())))),
-//                decoration: BoxDecoration(shape: BoxShape.rectangle, color: Colors.black12),
-              ),
-          ),
-        ),
-        _isReady ? Center(child:
-          Text('Room ID: ${widget.roomID}', style: TextStyle(color: Colors.red)),
+        )),
+        _isReady ? Align(alignment: Alignment.center,
+          child: Text('Room ID: ${_roomDocRef?.documentID}', style: TextStyle(color: Colors.white)),
         ) : Container()
       ],
     );
@@ -371,99 +368,24 @@ class _VideoLiveState extends State<VideoLive> {
 
   _closeAll() async {
     try {
-      _remoteMediaStream?.dispose();
-      _localMediaStream?.dispose();
-
-      _callerCandidatesCollectionScream?.cancel();
-      _calleeCandidatesCollectionScream?.cancel();
-      _roomCollectionRefScream?.cancel();
-      _roomReferenceSnapshotsScream?.cancel();
-
-      _rtcRemotePeerConnection?.close();
-      _rtcRemotePeerConnection?.dispose();
-
-      if (_isUserRoomOwner)
-        _roomDocumentReference.delete();
+      _mediaStream?.dispose();
+      _peers.forEach((peerID, pc) async {
+        _cleanPeerData(peerID);
+      });
+      _roomDocRef.delete();
     }
     catch (e) { print(e); }
-    _isRemoteConfigSet = false;
     print('>>>>>>>>>>> DISPOSED');
   }
 
-  @override
-  initState() {
-    super.initState();
-    initRenderers();
-  }
-}
-
-class SelectableWidget extends StatefulWidget {
-  final SelectableWidgetViewModel viewModel;
-
-  SelectableWidget(this.viewModel);
-
-  @override
-  State<StatefulWidget> createState() {
-    return SelectableWidgetState();
-  }
-}
-
-class SelectableWidgetState extends State<SelectableWidget> {
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    Container container;
-
-    if (widget.viewModel.isSelected) {
-      container = new Container(
-        alignment: Alignment.center,
-        height: 100.0,
-        color: Colors.green,
-        child: new Text(
-          widget.viewModel.title,
-          textAlign: TextAlign.center,
-          style: widget.viewModel.style,
-        ),
-      );
-    } else {
-      container = new Container(
-        alignment: Alignment.center,
-        height: 100.0,
-        color: Colors.blue,
-        child: new Text(
-          widget.viewModel.title,
-          textAlign: TextAlign.center,
-          style: widget.viewModel.style,
-        ),
-      );
+  void _cleanPeerData(String peerID) async {
+    final peerDocRef = _peersColRef.document(peerID);
+    if (peerDocRef != null) {
+      final clientICE = peerDocRef.collection(CLIENT_ICE_COLLECTION);
+      if (clientICE != null) await clientICE.getDocuments()..documents.clear();
+      final masterICE = peerDocRef.collection(MASTER_ICE_COLLECTION);
+      if (masterICE != null) await masterICE.getDocuments()..documents.clear();
+      await peerDocRef.delete();
     }
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          widget.viewModel.isSelected = !widget.viewModel.isSelected;
-          widget.viewModel.onSelected(widget.viewModel.title);
-        });
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: container,
-      ),
-    );
   }
-}
-
-typedef void OnSelected(String value);
-
-class SelectableWidgetViewModel {
-  bool isSelected;
-  String title;
-  TextStyle style;
-  OnSelected onSelected;
-
-  SelectableWidgetViewModel(this.title, {this.isSelected = false, this.style, this.onSelected});
 }
