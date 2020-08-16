@@ -52,7 +52,7 @@ class LiveVideoApp extends StatefulWidget {
 
 class _LiveVideoAppState extends State<LiveVideoApp> {
   String _selectedRoomID;
-  bool _startConnect = false;
+  bool _connected = false;
 
   var style = TextStyle(color: Colors.black, fontSize: 24.0);
 
@@ -67,7 +67,7 @@ class _LiveVideoAppState extends State<LiveVideoApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Welcome to Flutter',
-      home: Scaffold(body: _startConnect ? VideoLive(reInit:reInit, roomID:_selectedRoomID) :
+      home: Scaffold(body: _connected ? VideoLive(disconnect:stopStreaming, roomID:_selectedRoomID) :
         StreamBuilder<QuerySnapshot>(
           stream: _roomsColRef.snapshots(),
           builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
@@ -89,16 +89,22 @@ class _LiveVideoAppState extends State<LiveVideoApp> {
             );
           }),
       floatingActionButton: FloatingActionButton(
-        onPressed: reInit,
-        child: Icon(!_startConnect ? (_selectedRoomID != null ? Icons.camera_enhance : Icons.camera) : Icons.close),
-        backgroundColor: _startConnect ? Colors.red : Colors.blue,
+        onPressed: !_connected ? startStreaming : stopStreaming,
+        child: Icon(!_connected ? (_selectedRoomID != null ? Icons.camera_enhance : Icons.camera) : Icons.close),
+        backgroundColor: _connected ? Colors.red : Colors.blue,
       ),));
   }
 
-  void reInit() {
+  void startStreaming() {
     setState(() {
+      _connected = true;
+    });
+  }
+  
+  void stopStreaming() {
+    setState(() {
+      _connected = false;
       _selectedRoomID = null;
-      _startConnect = !_startConnect;
     });
   }
 }
@@ -109,9 +115,9 @@ class VideoLiveClient {
 }
 
 class VideoLive extends StatefulWidget {
-  final Function reInit;
+  final Function disconnect;
   final String roomID;
-  VideoLive({Key key, this.reInit, this.roomID}) : super(key: key);
+  VideoLive({Key key, this.disconnect, this.roomID}) : super(key: key);
   @override
   _VideoLiveState createState() => _VideoLiveState();
 }
@@ -133,10 +139,6 @@ class _VideoLiveState extends State<VideoLive> {
 
   initRenderers() async {
     _streamVideoRenderer = RTCVideoRenderer();
-    _streamVideoRenderer.onStateChanged = () {
-      print('_streamVideoRenderer.onStateChanged');
-      setState(() {});
-    };
     _streamVideoRenderer.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
     await _streamVideoRenderer.initialize();
     _streamVideoRenderer.mirror = true;
@@ -267,7 +269,7 @@ class _VideoLiveState extends State<VideoLive> {
           if (!peerDocSnapshot.exists) {
             unsubscribePeerDocListener.cancel();
             await _closeAll();
-            widget.reInit();
+            widget.disconnect();
             return;
           }
           final data = peerDocSnapshot.data;
@@ -372,7 +374,8 @@ class _VideoLiveState extends State<VideoLive> {
       _peers.forEach((peerID, pc) async {
         _cleanPeerData(peerID);
       });
-      _roomDocRef.delete();
+      if (_isRoomOwner)
+        _roomDocRef.delete();
     }
     catch (e) { print(e); }
     print('>>>>>>>>>>> DISPOSED');
