@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_videolive/SelectableWidget.dart';
 import 'package:flutter_webrtc/webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:uuid/uuid.dart';
+import 'package:provider/provider.dart';
+
+import 'model/store/VideoLiveStore.dart';
 
 Map<String, dynamic> _iceServers = {
   'iceServers': [
@@ -41,16 +44,19 @@ CollectionReference _roomsColRef;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _roomsColRef = Firestore.instance.collection('rooms');
-  runApp(LiveVideoApp());
+  runApp(Provider(
+    create: (_) => VideoLiveStore(),
+    child: VideoLiveApp()
+  ));
 }
 
-class LiveVideoApp extends StatefulWidget {
-  LiveVideoApp({Key key}) : super(key: key);
+class VideoLiveApp extends StatefulWidget {
+  VideoLiveApp({Key key}) : super(key: key);
   @override
-  _LiveVideoAppState createState() => _LiveVideoAppState();
+  _VideoLiveAppState createState() => _VideoLiveAppState();
 }
 
-class _LiveVideoAppState extends State<LiveVideoApp> {
+class _VideoLiveAppState extends State<VideoLiveApp> {
   String _selectedRoomID;
   bool _connected = false;
 
@@ -68,26 +74,32 @@ class _LiveVideoAppState extends State<LiveVideoApp> {
     return MaterialApp(
       title: 'Welcome to Flutter',
       home: Scaffold(body: _connected ? VideoLive(disconnect:stopStreaming, roomID:_selectedRoomID) :
-        StreamBuilder<QuerySnapshot>(
-          stream: _roomsColRef.snapshots(),
-          builder: (BuildContext context, AsyncSnapshot<QuerySnapshot> snapshot) {
-            if (snapshot.hasError) { return Text("Something went wrong"); }
-            if (snapshot.connectionState == ConnectionState.waiting) { return LinearProgressIndicator(); }
-            if (!snapshot.hasData || snapshot.data.documents.length == 0) return Align(alignment: Alignment.center, child:Text("No Rooms", style: style));
-
-            var docs = snapshot.data.documents;
-            return new ListView.builder(
-              itemCount: docs.length,
-              itemBuilder: (context, index) {
-                return SelectableWidget(SelectableWidgetViewModel(
-                    docs[index].documentID,
-                    onSelected: onSelected,
-                    isSelected: docs[index].documentID == _selectedRoomID,
-                    style: style
-                  ),
-                );},
-            );
-          }),
+      Consumer<VideoLiveStore>(builder: (_, videoLiveStore, __) {
+        return Observer(builder: (_) {
+          switch(videoLiveStore.roomsStatus) {
+            case RoomsStatus.CONNECTING: return LinearProgressIndicator(); break;
+            case RoomsStatus.ERROR: return Align(alignment: Alignment.center, child: Text("Something went wrong", style: style)); break;
+            case RoomsStatus.EMPTY: return Align(alignment: Alignment.center, child:Text("No Rooms", style: style)); break;
+            case RoomsStatus.READY:
+              return ListView.builder(
+                itemCount: videoLiveStore.rooms.length,
+                itemBuilder: (context, index) {
+                  var room = videoLiveStore.rooms[index];
+                  return SelectableWidget(
+                      SelectableWidgetViewModel(
+                          room.title,
+                          onSelected: onSelected,
+                          isSelected: room.isSelected,
+                          style: style
+                      )
+                  );
+                },
+              );
+              break;
+          }
+          return Container();
+        });
+      }),
       floatingActionButton: FloatingActionButton(
         onPressed: !_connected ? startStreaming : stopStreaming,
         child: Icon(!_connected ? (_selectedRoomID != null ? Icons.camera_enhance : Icons.camera) : Icons.close),
