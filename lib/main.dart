@@ -1,13 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:flutter_videolive/SelectableWidget.dart';
+import 'package:flutter_videolive/components/pages/rooms.page.dart';
+import 'package:flutter_videolive/components/widgets/SelectableList.dart';
 import 'package:flutter_webrtc/webrtc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
-import 'model/store/VideoLiveStore.dart';
+import 'components/pages/live.page.dart';
+import 'components/pages/wrong.page.dart';
+import 'model/store/LiveStore.dart';
+import 'model/store/RoomsStore.dart';
+import 'model/vo/RoomVO.dart';
+import 'routes.dart';
 
 Map<String, dynamic> _iceServers = {
   'iceServers': [
@@ -44,79 +51,47 @@ CollectionReference _roomsColRef;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   _roomsColRef = Firestore.instance.collection('rooms');
-  runApp(Provider(
-    create: (_) => VideoLiveStore(),
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+  SystemChrome.setEnabledSystemUIOverlays([]);
+  runApp(MultiProvider(
+    providers: [
+      Provider<RoomsStore>(create: (ctx) => RoomsStore() ),
+      Provider<LiveStore>(create: (ctx) => LiveStore() ),
+    ],
     child: VideoLiveApp()
   ));
 }
 
-class VideoLiveApp extends StatefulWidget {
-  VideoLiveApp({Key key}) : super(key: key);
-  @override
-  _VideoLiveAppState createState() => _VideoLiveAppState();
-}
-
-class _VideoLiveAppState extends State<VideoLiveApp> {
-  String _selectedRoomID;
-  bool _connected = false;
-
-  var style = TextStyle(color: Colors.black, fontSize: 24.0);
-
-  void onSelected(String value) {
-    print('Selected $value');
-    setState(() {
-      _selectedRoomID = value;
-    });
-  }
+class VideoLiveApp extends StatelessWidget {
+  final style = TextStyle(color: Colors.black, fontSize: 24.0);
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Welcome to Flutter',
-      home: Scaffold(body: _connected ? VideoLive(disconnect:stopStreaming, roomID:_selectedRoomID) :
-      Consumer<VideoLiveStore>(builder: (_, videoLiveStore, __) {
-        return Observer(builder: (_) {
-          switch(videoLiveStore.roomsStatus) {
-            case RoomsStatus.CONNECTING: return LinearProgressIndicator(); break;
-            case RoomsStatus.ERROR: return Align(alignment: Alignment.center, child: Text("Something went wrong", style: style)); break;
-            case RoomsStatus.EMPTY: return Align(alignment: Alignment.center, child:Text("No Rooms", style: style)); break;
-            case RoomsStatus.READY:
-              return ListView.builder(
-                itemCount: videoLiveStore.rooms.length,
-                itemBuilder: (context, index) {
-                  var room = videoLiveStore.rooms[index];
-                  return SelectableWidget(
-                      SelectableWidgetViewModel(
-                          room.title,
-                          onSelected: onSelected,
-                          isSelected: room.isSelected,
-                          style: style
-                      )
-                  );
-                },
-              );
-              break;
-          }
-          return Container();
-        });
-      }),
-      floatingActionButton: FloatingActionButton(
-        onPressed: !_connected ? startStreaming : stopStreaming,
-        child: Icon(!_connected ? (_selectedRoomID != null ? Icons.camera_enhance : Icons.camera) : Icons.close),
-        backgroundColor: _connected ? Colors.red : Colors.blue,
-      ),));
-  }
-
-  void startStreaming() {
-    setState(() {
-      _connected = true;
-    });
-  }
-  
-  void stopStreaming() {
-    setState(() {
-      _connected = false;
-      _selectedRoomID = null;
+    return Consumer<RoomsStore>(builder: (ct, roomsStore, _) {
+      return MaterialApp(
+          title: 'VideoLive',
+          onGenerateRoute: (RouteSettings settings) {
+            print("> Main -> onGenerateRoute: ${settings.name}");
+            Widget page;
+            switch (settings.name) {
+              case Routes.LIVE_PAGE:
+                page = LivePage(settings.arguments as RoomVO);
+                break;
+              default:
+                page = WrongPage();
+            }
+            return MaterialPageRoute(builder: (context) => page);;
+          },
+          /* SELECT ROOM */
+          home: RoomsPage() // ROOMS
+        /* START STREAM */
+//      home: LivePage(null)
+        /* JOIN STREAM (ID must be real) */
+//      home: LivePage(new RoomVO('tNToqwbRKhpH6hRD4dzO', 'ID'))
+//      home: VideoLive(roomID:'lwY31B6T73VpgoUzPSVJ')
+      );
     });
   }
 }
@@ -159,6 +134,7 @@ class _VideoLiveState extends State<VideoLive> {
     _streamVideoRenderer = RTCVideoRenderer();
     _streamVideoRenderer.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
     await _streamVideoRenderer.initialize();
+
     print('> _streamVideoRenderer.textureId = ${_streamVideoRenderer.textureId}');
     _streamVideoRenderer.mirror = true;
 
@@ -273,7 +249,7 @@ class _VideoLiveState extends State<VideoLive> {
         final peerID = peerDocRef.documentID;
 
         print('======= Join room: ${_roomDocRef.documentID}');
-        print('> 0. Peer created: $peerID');
+        print('> \t0. Peer created: $peerID');
 
         print('> \t1. Create peerConnection');
         final peerConnection = await createPeerConnection(_iceServers, {});
@@ -376,7 +352,7 @@ class _VideoLiveState extends State<VideoLive> {
             ),
         )),
         _isReady ? Align(alignment: Alignment.center,
-          child: Text('Room ID: ${_roomDocRef?.documentID}', style: TextStyle(color: Colors.white)),
+          child: Text('Room ID: ${_roomDocRef?.documentID}', style: TextStyle(color: Colors.white, fontSize: 12)),
         ) : Container()
       ],
     );

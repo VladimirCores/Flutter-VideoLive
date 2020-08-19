@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 
-class SelectableWidget extends StatefulWidget {
-  final SelectableWidgetViewModel viewModel;
+class SelectableRoomWidget extends StatefulWidget {
+  final SelectableRoomWidgetViewModel viewModel;
 
-  SelectableWidget(this.viewModel);
+  SelectableRoomWidget(this.viewModel);
 
   @override
   State<StatefulWidget> createState() {
-    return SelectableWidgetState();
+    return SelectableRoomWidgetState();
   }
 }
 
-class SelectableWidgetState extends State<SelectableWidget> {
+class SelectableRoomWidgetState extends State<SelectableRoomWidget> {
   @override
   void initState() {
     super.initState();
@@ -48,9 +48,8 @@ class SelectableWidgetState extends State<SelectableWidget> {
     return GestureDetector(
       onTap: () {
         setState(() {
-          widget.viewModel.isSelected = !widget.viewModel.isSelected;
-          widget.viewModel.onSelected(widget.viewModel.isSelected
-              ? widget.viewModel.title
+          widget.viewModel.onSelected(!widget.viewModel.isSelected
+              ? widget.viewModel.id
               : null
           );
         });
@@ -65,11 +64,12 @@ class SelectableWidgetState extends State<SelectableWidget> {
 
 typedef void OnSelected(String value);
 
-class SelectableWidgetViewModel {
+class SelectableRoomWidgetViewModel {
   bool isSelected;
+  String id;
   String title;
   TextStyle style;
   OnSelected onSelected;
 
-  SelectableWidgetViewModel(this.title, {this.isSelected = false, this.style, this.onSelected});
+  SelectableRoomWidgetViewModel(this.id, this.title, {this.isSelected = false, this.style, this.onSelected});
 }
