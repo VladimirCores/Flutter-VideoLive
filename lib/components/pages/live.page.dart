@@ -59,7 +59,11 @@ class LivePage extends StatelessWidget {
               case RoomStatus.ROOM_OWNER:
                 statusChildren.add(_StatusMessage("Room Owner", _textStyle_Message));
                 break;
+              case RoomStatus.CAMERA_READY:
+                statusChildren.add(_StatusMessage("Camera Ready", _textStyle_Message));
+                break;
               case RoomStatus.ROOM_EXISTS:
+                spinnerWidget = null;
                 statusChildren.add(_StatusMessage("Room Exists", _textStyle_Message));
                 break;
               case RoomStatus.PEER_CREATED:
@@ -80,8 +84,11 @@ class LivePage extends StatelessWidget {
               case RoomStatus.ANSWER_POSTED:
                 statusChildren.add(_StatusMessage("Answer Posted", _textStyle_Message));
                 break;
-              case RoomStatus.MEDIA_ARRIVED:
+              case RoomStatus.MEDIA_SET:
                 statusChildren.add(_StatusMessage("Media Arrived", _textStyle_Ready));
+                break;
+              case RoomStatus.ICE_FAILED:
+                statusChildren.add(_StatusMessage("ICE FAILED", _textStyle_Message));
                 break;
               case RoomStatus.ICE_CONNECTED:
                 spinnerWidget = null;
@@ -98,12 +105,10 @@ class LivePage extends StatelessWidget {
             if (liveStore.mediaStream != null)
             {
               var mediaRenderer = liveStore.mediaRenderer;
+              print('> mediaRenderer.rotation: ${mediaRenderer.rotation}');
               stackChildren.add(
-                Container(
-                  width: screenWidth,
-                  height: screenHeight,
-                    child:
-                        RTCVideoView(mediaRenderer)
+                Container(width: screenWidth, height: screenHeight,
+                    child: RTCVideoView(mediaRenderer)
                 ),
               );
             }
@@ -127,12 +132,11 @@ class _StatusMessage extends StatelessWidget {
   final String message;
   final TextStyle textStyle;
   _StatusMessage(this.message, this.textStyle);
-  @override
-  Widget build(BuildContext context) {
+  @override Widget build(BuildContext context) {
     return ListTile(
-        title: Align(
-          alignment: Alignment.center,
-          child: Text(message, style: textStyle)),
+        title: Align(alignment: Alignment.center,
+          child: Text(message, style: textStyle)
+        ),
     );
   }
 }

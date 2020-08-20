@@ -17,7 +17,7 @@ class RoomsStore = _RoomsStore with _$RoomsStore;
 
 abstract class _RoomsStore with Store {
 
-  final _roomsColRef = Firestore.instance.collection('rooms');
+  CollectionReference _roomsColRef = FirebaseFirestore.instance.collection('rooms');
   StreamSubscription _roomsSubscription;
 
   bool isRoomSelected(room) { return selectedRoom == room; }
@@ -36,16 +36,16 @@ abstract class _RoomsStore with Store {
   List<RoomVO> rooms;
 
   _RoomsStore() {
-    _roomsSubscription = _roomsColRef.snapshots().listen((QuerySnapshot rs) {
-      final docs = rs.documents;
+    _roomsSubscription = _roomsColRef.snapshots().listen((QuerySnapshot snapshot) {
+      final docs = snapshot.docs;
       print('> RoomsStore: roomsSubscription -> isEmpty: ${docs.isEmpty}');
       if (docs.isNotEmpty) {
         var canRoomsBeUpdate = rooms == null || docs.length != rooms.length;
         print('> RoomsStore: roomsSubscription -> canRoomsBeUpdate: $canRoomsBeUpdate');
         if (canRoomsBeUpdate) {
           // TODO: Replace second param with room title
-          _onRoomsUpdated(docs.map<RoomVO>((ds) =>
-              RoomVO(ds.documentID, 'ID: ' + ds.documentID)).toList());
+          _onRoomsUpdated(docs.map<RoomVO>((doc) =>
+              RoomVO(doc.id, 'ID: ' + doc.id)).toList());
         }
         _onStatusChanged(RoomsStatus.READY);
       }

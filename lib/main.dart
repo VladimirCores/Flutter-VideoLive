@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
@@ -50,7 +51,6 @@ CollectionReference _roomsColRef;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  _roomsColRef = Firestore.instance.collection('rooms');
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
@@ -60,7 +60,27 @@ Future<void> main() async {
       Provider<RoomsStore>(create: (ctx) => RoomsStore() ),
       Provider<LiveStore>(create: (ctx) => LiveStore() ),
     ],
-    child: VideoLiveApp()
+    child: FutureBuilder(
+        future: Firebase.initializeApp(),
+        builder: (context, snapshot) {
+          // Check for errors
+          if (snapshot.hasError) {
+            return Text('Error Connection Firebase');
+          }
+
+          // Once complete, show your application
+          if (snapshot.connectionState == ConnectionState.done) {
+            return VideoLiveApp();
+          }
+
+          // Otherwise, show something whilst waiting for initialization to complete
+          return Container(
+            width: 100,
+            height: 100,
+            child: CircularProgressIndicator()
+          );
+        },
+    )
   ));
 }
 
@@ -85,12 +105,12 @@ class VideoLiveApp extends StatelessWidget {
             return MaterialPageRoute(builder: (context) => page);;
           },
           /* SELECT ROOM */
-          home: RoomsPage() // ROOMS
+          home: RoomsPage()
         /* START STREAM */
 //      home: LivePage(null)
         /* JOIN STREAM (ID must be real) */
 //      home: LivePage(new RoomVO('tNToqwbRKhpH6hRD4dzO', 'ID'))
-//      home: VideoLive(roomID:'lwY31B6T73VpgoUzPSVJ')
+//      home: VideoLive(roomID:'9ufNn6h3rvVGU6yUfY0W')
       );
     });
   }
@@ -128,205 +148,205 @@ class _VideoLiveState extends State<VideoLive> {
   bool _isMediaReady = false;
   bool _isConnected = false;
 
-  @override initState() { super.initState(); initRenderers(); }
+//  @override initState() { super.initState(); initRenderers(); }
 
-  initRenderers() async {
-    _streamVideoRenderer = RTCVideoRenderer();
-    _streamVideoRenderer.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
-    await _streamVideoRenderer.initialize();
-
-    print('> _streamVideoRenderer.textureId = ${_streamVideoRenderer.textureId}');
-    _streamVideoRenderer.mirror = true;
-
-    _isMediaReady = false;
-    _isConnected = false;
-
-    _isRoomOwner = widget.roomID == null;
-    print('> _isRoomOwner: $_isRoomOwner');
-
-    _roomDocRef = !_isRoomOwner
-        ? _roomsColRef.document(widget.roomID)
-        : _roomsColRef.document(); // Create new room
-
-    if (!mounted) return;
-
-    DocumentSnapshot roomDoc = await _roomDocRef.get();
-
-    if (_isRoomOwner)
-    {
-      roomDoc.reference.setData({ 'info': { 'name': DateTime.now().toString() } });
-      _peersColRef = _roomDocRef.collection(PEERS_COLLECTION);
-
-      if (!mounted) return;
-
-      _mediaStream = await navigator.getUserMedia(_mediaStreamConstraints);
-      
-      _peersCollectionSubscription = _peersColRef.snapshots().listen((QuerySnapshot peersSnapshot) {
-        peersSnapshot.documentChanges.forEach((DocumentChange peerChange) async {
-          if (peerChange.type == DocumentChangeType.modified) return;
-
-          final document = peerChange.document;
-          final peerID = document.documentID;
-
-          print('> peers: change: ${peerChange.type} | id: ${document.documentID}');
-
-          if (peerChange.type == DocumentChangeType.removed && _peers.containsKey(peerID)) {
-            print('> peers: remove peer: $peerID');
-            _cleanPeerData(peerID);
-            _peers[peerID].pc.close();
-            _peers.remove(peerID);
-          }
-
-          if (peerChange.type == DocumentChangeType.added && !_peers.containsKey(peerID)) {
-            print('====> start new registration');
-            final peerDocRef = _peersColRef.document(peerID);
-            print('> \t1. Create RTC connection client');
-            final peerConnection = await createPeerConnection(_iceServers, {});
-            print('> \t2. Save peerID ($peerID) in a collection');
-            _peers[peerID] = VideoLivePeer(peerID, peerConnection);
-            print('> \t3. Add media stream');
-            _peers[peerID].pc.addStream(_mediaStream);
-            print('> \t4.1. Listener on ICE candidates');
-            _peers[peerID].pc.onIceCandidate = (RTCIceCandidate candidate) {
-              peerDocRef.collection(MASTER_ICE_COLLECTION).add({
-                'sdpMLineIndex': candidate.sdpMlineIndex,
-                'sdpMid': candidate.sdpMid,
-                'candidate': candidate.candidate,
-              });
-            };
-            _peers[peerID].pc.onIceConnectionState = (RTCIceConnectionState state) {
-              print('> onIceConnectionState: $state');
-            };
-            print('> \t4.2. Setup listener for client ICE collection');
-            _peers[peerID].iceSubscription = peerDocRef.collection(CLIENT_ICE_COLLECTION).snapshots().listen((QuerySnapshot iceClientSnapshot) {
-              iceClientSnapshot.documentChanges.forEach((DocumentChange iceChange) async {
-                if (iceChange.type == DocumentChangeType.added) {
-                  final candidateData = iceChange.document.data;
-                  print('> $CLIENT_ICE_COLLECTION: snapshots -> candidate added: $candidateData');
-                  final candidate = RTCIceCandidate(
-                      candidateData['candidate'],
-                      candidateData['sdpMid'],
-                      candidateData['sdpMLineIndex']
-                  );
-                  _peers[peerID].pc.addCandidate(candidate);
-                }
-              });
-            });
-            print('> \t4.3. Setup listener for answer');
-            _peers[peerID].peerDocSubscription = peerDocRef.snapshots().listen((DocumentSnapshot snapshot) async {
-              if (!snapshot.exists) { _cleanPeerData(peerID); return; }
-              final data = snapshot.data;
-              final answer = data['answer'];
-              print('> peerDocument.listen: has snapshot: ${snapshot.documentID}');
-              if (answer != null) {
-                print('> peerDocument.listen -> Got remote answer: $answer');
-                final rtcSessionDescription = RTCSessionDescription(answer['sdp'], answer['type']);
-                await _peers[peerID].pc.setRemoteDescription(rtcSessionDescription);
-              }
-            });
-            if (!mounted) return;
-            RTCSessionDescription offer = await _peers[peerID].pc.createOffer({});
-            await _peers[peerID].pc.setLocalDescription(offer);
-            await peerDocRef.updateData({
-              'offer': { 'type': offer.type, 'sdp': offer.sdp },
-            });
-          }
-        });
-      });
-      _streamVideoRenderer.srcObject = _mediaStream;
-      setState(() {
-        _isConnected = true;
-        _isMediaReady = true;
-      });
-    }
-    else
-    {
-      if (roomDoc.exists)
-      {
-        _peersColRef = _roomDocRef.collection(PEERS_COLLECTION);
-        final peerDocRef = _peersColRef.document();
-        await peerDocRef.setData({ 'info': { 'name': DateTime.now().toString() }});
-        final peerID = peerDocRef.documentID;
-
-        print('======= Join room: ${_roomDocRef.documentID}');
-        print('> \t0. Peer created: $peerID');
-
-        print('> \t1. Create peerConnection');
-        final peerConnection = await createPeerConnection(_iceServers, {});
-        print('> \t2. Save peerID ($peerID) in a collection');
-        _peers[peerID] = VideoLivePeer(peerID, peerConnection);
-        _peers[peerID].pc.onIceConnectionState = (RTCIceConnectionState state) {
-          print('> onIceConnectionState: $state');
-          if (state == RTCIceConnectionState.RTCIceConnectionStateConnected)
-            setState((){ _isConnected = true; });
-        };
-        _peers[peerID].iceSubscription = peerDocRef.collection(MASTER_ICE_COLLECTION).snapshots().listen((QuerySnapshot iceMasterSnapshot) {
-          iceMasterSnapshot.documentChanges.forEach((DocumentChange iceMasterChange) async {
-            if (iceMasterChange.type == DocumentChangeType.added) {
-              final cd = iceMasterChange.document.data;
-              print('> $MASTER_ICE_COLLECTION: snapshots -> candidate added: $cd');
-              final candidate = RTCIceCandidate(cd['candidate'], cd['sdpMid'], cd['sdpMLineIndex']);
-              _peers[peerID].pc.addCandidate(candidate);
-            }
-          });
-        });
-
-        _peers[peerID].peerDocSubscription = peerDocRef.snapshots().listen((DocumentSnapshot peerDocSnapshot) async {
-          if (!peerDocSnapshot.exists) {
-            await _closeAll();
-            widget.disconnect();
-            return;
-          }
-          final data = peerDocSnapshot.data;
-          final answer = data['answer'];
-          final offer = data['offer'];
-          print('> peerDocument.listen: has snapshot: ${peerDocSnapshot.documentID}');
-          print('> -> peer update: offer|answer (${offer!=null}|${answer!=null})');
-
-          if (offer != null && answer == null)
-          {
-            print('> \t3. Listen for media tracks');
-            _peers[peerID].pc.onAddStream = (stream) {
-              _mediaStream = stream;
-              _streamVideoRenderer.srcObject = stream;
-              print('>>> peerConnection.onAddStream');
-              setState(() { _isMediaReady = true; });
-            };
-            _peers[peerID].pc.onRemoveStream = (stream) {
-              print('>>> peerConnection.onRemoveStream');
-              _mediaStream?.dispose();
-              _streamVideoRenderer.srcObject = null;
-              setState(() { _isMediaReady = false; });
-            };
-            print('> \t4. Listener on ICE candidates');
-            _peers[peerID].pc.onIceCandidate = (RTCIceCandidate iceClientCandidate) {
-              peerDocRef.collection(CLIENT_ICE_COLLECTION).add({
-                'sdpMLineIndex': iceClientCandidate.sdpMlineIndex,
-                'sdpMid': iceClientCandidate.sdpMid,
-                'candidate': iceClientCandidate.candidate,
-              });
-            };
-            if (!mounted) return;
-            // 1. Register offer
-            print('> 5.1 Register offer: ${offer['type']}');
-            RTCSessionDescription remote = RTCSessionDescription(offer['sdp'], offer['type']);
-            await _peers[peerID].pc.setRemoteDescription(remote);
-            if (!mounted) return;
-            // 2. Register answer
-            print('> 5.2 Answer created: $peerID');
-            RTCSessionDescription answer = await _peers[peerID].pc.createAnswer({});
-            _peers[peerID].pc.setLocalDescription(answer);
-            print('> 6. Post answer to the peer document');
-            await peerDocRef.updateData({
-              'answer': { 'type': answer.type, 'sdp': answer.sdp }});
-          }
-        });
-      }
-    }
-
-    print('> _roomID: ${_roomDocRef.documentID}');
-    if (this.mounted) setState(() { _isReady = true; });
-  }
+//  initRenderers() async {
+//    _streamVideoRenderer = RTCVideoRenderer();
+//    _streamVideoRenderer.objectFit = RTCVideoViewObjectFit.RTCVideoViewObjectFitCover;
+//    await _streamVideoRenderer.initialize();
+//
+//    print('> _streamVideoRenderer.textureId = ${_streamVideoRenderer.textureId}');
+//    _streamVideoRenderer.mirror = true;
+//
+//    _isMediaReady = false;
+//    _isConnected = false;
+//
+//    _isRoomOwner = widget.roomID == null;
+//    print('> _isRoomOwner: $_isRoomOwner');
+//
+//    _roomDocRef = !_isRoomOwner
+//        ? _roomsColRef.document(widget.roomID)
+//        : _roomsColRef.document(); // Create new room
+//
+//    if (!mounted) return;
+//
+//    DocumentSnapshot roomDoc = await _roomDocRef.get();
+//
+//    if (_isRoomOwner)
+//    {
+//      roomDoc.reference.setData({ 'info': { 'name': DateTime.now().toString() } });
+//      _peersColRef = _roomDocRef.collection(PEERS_COLLECTION);
+//
+//      if (!mounted) return;
+//
+//      _mediaStream = await navigator.getUserMedia(_mediaStreamConstraints);
+//
+//      _peersCollectionSubscription = _peersColRef.snapshots().listen((QuerySnapshot peersSnapshot) {
+//        peersSnapshot.documentChanges.forEach((DocumentChange peerChange) async {
+//          if (peerChange.type == DocumentChangeType.modified) return;
+//
+//          final document = peerChange.document;
+//          final peerID = document.documentID;
+//
+//          print('> peers: change: ${peerChange.type} | id: ${document.documentID}');
+//
+//          if (peerChange.type == DocumentChangeType.removed && _peers.containsKey(peerID)) {
+//            print('> peers: remove peer: $peerID');
+//            _cleanPeerData(peerID);
+//            _peers[peerID].pc.close();
+//            _peers.remove(peerID);
+//          }
+//
+//          if (peerChange.type == DocumentChangeType.added && !_peers.containsKey(peerID)) {
+//            print('====> start new registration');
+//            final peerDocRef = _peersColRef.document(peerID);
+//            print('> \t1. Create RTC connection client');
+//            final peerConnection = await createPeerConnection(_iceServers, {});
+//            print('> \t2. Save peerID ($peerID) in a collection');
+//            _peers[peerID] = VideoLivePeer(peerID, peerConnection);
+//            print('> \t3. Add media stream');
+//            _peers[peerID].pc.addStream(_mediaStream);
+//            print('> \t4.1. Listener on ICE candidates');
+//            _peers[peerID].pc.onIceCandidate = (RTCIceCandidate candidate) {
+//              peerDocRef.collection(MASTER_ICE_COLLECTION).add({
+//                'sdpMLineIndex': candidate.sdpMlineIndex,
+//                'sdpMid': candidate.sdpMid,
+//                'candidate': candidate.candidate,
+//              });
+//            };
+//            _peers[peerID].pc.onIceConnectionState = (RTCIceConnectionState state) {
+//              print('> onIceConnectionState: $state');
+//            };
+//            print('> \t4.2. Setup listener for client ICE collection');
+//            _peers[peerID].iceSubscription = peerDocRef.collection(CLIENT_ICE_COLLECTION).snapshots().listen((QuerySnapshot iceClientSnapshot) {
+//              iceClientSnapshot.documentChanges.forEach((DocumentChange iceChange) async {
+//                if (iceChange.type == DocumentChangeType.added) {
+//                  final candidateData = iceChange.document.data;
+//                  print('> $CLIENT_ICE_COLLECTION: snapshots -> candidate added: $candidateData');
+//                  final candidate = RTCIceCandidate(
+//                      candidateData['candidate'],
+//                      candidateData['sdpMid'],
+//                      candidateData['sdpMLineIndex']
+//                  );
+//                  _peers[peerID].pc.addCandidate(candidate);
+//                }
+//              });
+//            });
+//            print('> \t4.3. Setup listener for answer');
+//            _peers[peerID].peerDocSubscription = peerDocRef.snapshots().listen((DocumentSnapshot snapshot) async {
+//              if (!snapshot.exists) { _cleanPeerData(peerID); return; }
+//              final data = snapshot.data;
+//              final answer = data['answer'];
+//              print('> peerDocument.listen: has snapshot: ${snapshot.documentID}');
+//              if (answer != null) {
+//                print('> peerDocument.listen -> Got remote answer: $answer');
+//                final rtcSessionDescription = RTCSessionDescription(answer['sdp'], answer['type']);
+//                await _peers[peerID].pc.setRemoteDescription(rtcSessionDescription);
+//              }
+//            });
+//            if (!mounted) return;
+//            RTCSessionDescription offer = await _peers[peerID].pc.createOffer({});
+//            await _peers[peerID].pc.setLocalDescription(offer);
+//            await peerDocRef.updateData({
+//              'offer': { 'type': offer.type, 'sdp': offer.sdp },
+//            });
+//          }
+//        });
+//      });
+//      _streamVideoRenderer.srcObject = _mediaStream;
+//      setState(() {
+//        _isConnected = true;
+//        _isMediaReady = true;
+//      });
+//    }
+//    else
+//    {
+//      if (roomDoc.exists)
+//      {
+//        _peersColRef = _roomDocRef.collection(PEERS_COLLECTION);
+//        final peerDocRef = _peersColRef.document();
+//        await peerDocRef.setData({ 'info': { 'name': DateTime.now().toString() }});
+//        final peerID = peerDocRef.documentID;
+//
+//        print('======= Join room: ${_roomDocRef.documentID}');
+//        print('> \t0. Peer created: $peerID');
+//
+//        print('> \t1. Create peerConnection');
+//        final peerConnection = await createPeerConnection(_iceServers, {});
+//        print('> \t2. Save peerID ($peerID) in a collection');
+//        _peers[peerID] = VideoLivePeer(peerID, peerConnection);
+//        _peers[peerID].pc.onIceConnectionState = (RTCIceConnectionState state) {
+//          print('> onIceConnectionState: $state');
+//          if (state == RTCIceConnectionState.RTCIceConnectionStateConnected)
+//            setState((){ _isConnected = true; });
+//        };
+//        _peers[peerID].iceSubscription = peerDocRef.collection(MASTER_ICE_COLLECTION).snapshots().listen((QuerySnapshot iceMasterSnapshot) {
+//          iceMasterSnapshot.documentChanges.forEach((DocumentChange iceMasterChange) async {
+//            if (iceMasterChange.type == DocumentChangeType.added) {
+//              final cd = iceMasterChange.document.data;
+//              print('> $MASTER_ICE_COLLECTION: snapshots -> candidate added: $cd');
+//              final candidate = RTCIceCandidate(cd['candidate'], cd['sdpMid'], cd['sdpMLineIndex']);
+//              _peers[peerID].pc.addCandidate(candidate);
+//            }
+//          });
+//        });
+//
+//        _peers[peerID].peerDocSubscription = peerDocRef.snapshots().listen((DocumentSnapshot peerDocSnapshot) async {
+//          if (!peerDocSnapshot.exists) {
+//            await _closeAll();
+//            widget.disconnect();
+//            return;
+//          }
+//          final data = peerDocSnapshot.data;
+//          final answer = data['answer'];
+//          final offer = data['offer'];
+//          print('> peerDocument.listen: has snapshot: ${peerDocSnapshot.documentID}');
+//          print('> -> peer update: offer|answer (${offer!=null}|${answer!=null})');
+//
+//          if (offer != null && answer == null)
+//          {
+//            print('> \t3. Listen for media tracks');
+//            _peers[peerID].pc.onAddStream = (stream) {
+//              _mediaStream = stream;
+//              _streamVideoRenderer.srcObject = stream;
+//              print('>>> peerConnection.onAddStream');
+//              setState(() { _isMediaReady = true; });
+//            };
+//            _peers[peerID].pc.onRemoveStream = (stream) {
+//              print('>>> peerConnection.onRemoveStream');
+//              _mediaStream?.dispose();
+//              _streamVideoRenderer.srcObject = null;
+//              setState(() { _isMediaReady = false; });
+//            };
+//            print('> \t4. Listener on ICE candidates');
+//            _peers[peerID].pc.onIceCandidate = (RTCIceCandidate iceClientCandidate) {
+//              peerDocRef.collection(CLIENT_ICE_COLLECTION).add({
+//                'sdpMLineIndex': iceClientCandidate.sdpMlineIndex,
+//                'sdpMid': iceClientCandidate.sdpMid,
+//                'candidate': iceClientCandidate.candidate,
+//              });
+//            };
+//            if (!mounted) return;
+//            // 1. Register offer
+//            print('> 5.1 Register offer: ${offer['type']}');
+//            RTCSessionDescription remote = RTCSessionDescription(offer['sdp'], offer['type']);
+//            await _peers[peerID].pc.setRemoteDescription(remote);
+//            if (!mounted) return;
+//            // 2. Register answer
+//            print('> 5.2 Answer created: $peerID');
+//            RTCSessionDescription answer = await _peers[peerID].pc.createAnswer({});
+//            _peers[peerID].pc.setLocalDescription(answer);
+//            print('> 6. Post answer to the peer document');
+//            await peerDocRef.updateData({
+//              'answer': { 'type': answer.type, 'sdp': answer.sdp }});
+//          }
+//        });
+//      }
+//    }
+//
+//    print('> _roomID: ${_roomDocRef.documentID}');
+//    if (this.mounted) setState(() { _isReady = true; });
+//  }
 
   @override
   Widget build(BuildContext context) {

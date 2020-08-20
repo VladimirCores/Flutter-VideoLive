@@ -67,6 +67,10 @@ flutter {
     source '../..'
 }
 
+project.ext {
+    set('FlutterFire', [FirebaseSDKVersion: '21.1.0'])
+}
+
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
     implementation 'com.google.firebase:firebase-analytics-ktx:17.5.0'
