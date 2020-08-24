@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:flutter_videolive/components/widgets/DisposableBuilder.dart';
+import 'package:flutter_videolive/components/widgets/LifeCycleWidget.dart';
 import 'package:flutter_videolive/model/store/LiveStore.dart';
+import 'package:flutter_videolive/model/store/live/enum/LiveStatus.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
 import 'package:flutter_webrtc/rtc_video_view.dart';
 import 'package:provider/provider.dart';
@@ -33,76 +34,97 @@ class LivePage extends StatelessWidget {
     body: Container(
       width: screenWidth,
       height: screenHeight,
+      color: Colors.black26,
       alignment: Alignment.topLeft,
       child: Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
-        return DisposableBuilder(
+        return LifeCycleWidget(
           init: () => liveStore.initialize(roomVO),
           dispose: () async => liveStore.dispose(true),
           builder: (dct, ss) => Observer(builder: (ost) {
-            print('< LivePage: RoomStatus = ${liveStore.roomStatus}');
+            print('< LivePage: LiveStatus = ${liveStore.roomStatus}');
             final roomStatus = liveStore.roomStatus;
             switch(roomStatus) {
-              case RoomStatus.CLOSED:
-              case RoomStatus.INITIAL:
+              case LiveStatus.CLOSED:
+              case LiveStatus.INITIAL:
                 statusChildren.add(Divider());
                 break;
-              case RoomStatus.ALREADY_CONNECTED:
+              case LiveStatus.ALREADY_CONNECTED:
                 statusChildren.add(_StatusMessage("Already Connected", _textStyle_Message));
                 break;
-              case RoomStatus.PREPARE:
+              case LiveStatus.PREPARE:
                   spinnerWidget = LinearProgressIndicator();
                   statusChildren.add(_StatusMessage("Prepare Room", _textStyle_Message));
                 break;
-              case RoomStatus.RENDERER_READY:
+              case LiveStatus.RENDERER_READY:
                 statusChildren.add(_StatusMessage("Renderer Ready", _textStyle_Message));
                 break;
-              case RoomStatus.ROOM_OWNER:
+              case LiveStatus.MASTER_REGISTER_ROOM:
                 statusChildren.add(_StatusMessage("Room Owner", _textStyle_Message));
                 break;
-              case RoomStatus.CAMERA_READY:
+              case LiveStatus.MASTER_CAMERA_READY:
                 statusChildren.add(_StatusMessage("Camera Ready", _textStyle_Message));
                 break;
-              case RoomStatus.ROOM_EXISTS:
+              case LiveStatus.ROOM_SET:
                 spinnerWidget = null;
                 statusChildren.add(_StatusMessage("Room Exists", _textStyle_Message));
                 break;
-              case RoomStatus.PEER_CREATED:
+              case LiveStatus.CLIENT_PEER_CREATED:
                 statusChildren.add(_StatusMessage("Peer Created", _textStyle_Message));
                 break;
-              case RoomStatus.PEER_REGISTERED:
+              case LiveStatus.CLIENT_PEER_REGISTERED:
                 statusChildren.add(_StatusMessage("Peer Registered", _textStyle_Message));
                 break;
-              case RoomStatus.OFFER_RECEIVED:
+              case LiveStatus.CLIENT_OFFER_RECEIVED:
                 statusChildren.add(_StatusMessage("Offer Received", _textStyle_Message));
                 break;
-              case RoomStatus.REMOTE_DESCRIPTION_SET:
+              case LiveStatus.REMOTE_DESCRIPTION_SET:
                 statusChildren.add(_StatusMessage("Remote Description Set", _textStyle_Message));
                 break;
-              case RoomStatus.LOCAL_DESCRIPTION_SET:
+              case LiveStatus.LOCAL_DESCRIPTION_SET:
                 statusChildren.add(_StatusMessage("Local Description Set", _textStyle_Message));
                 break;
-              case RoomStatus.ANSWER_POSTED:
+              case LiveStatus.CLIENT_ANSWER_POSTED:
                 statusChildren.add(_StatusMessage("Answer Posted", _textStyle_Message));
                 break;
-              case RoomStatus.MEDIA_SET:
+              case LiveStatus.MEDIA_ARRIVED:
                 statusChildren.add(_StatusMessage("Media Arrived", _textStyle_Ready));
                 break;
-              case RoomStatus.ICE_FAILED:
+              case LiveStatus.MASTER_MEDIA_ATTACHED_TO_PEER:
+                statusChildren.add(_StatusMessage("Media Set", _textStyle_Ready));
+                break;
+              case LiveStatus.ICE_FAILED:
+                Navigator.pop(dct);
                 statusChildren.add(_StatusMessage("ICE FAILED", _textStyle_Message));
                 break;
-              case RoomStatus.ICE_CONNECTED:
+              case LiveStatus.ICE_CONNECTED:
                 spinnerWidget = null;
                 statusChildren.add(_StatusMessage("ICE CONNECTED", _textStyle_Message));
                 break;
-              case RoomStatus.DISPOSED:
+              case LiveStatus.DISPOSED:
                 statusChildren.add(_StatusMessage("Disposed", _textStyle_Message));
                 break;
-              case RoomStatus.ERROR:
-                statusChildren.add(_StatusMessage("Error", _textStyle_UnexpectedError));
+              case LiveStatus.CLIENT_ROOM_NOT_EXISTS:
+                statusChildren.add(_StatusMessage("Client Room Not Exists", _textStyle_UnexpectedError));
+                break;
+              case LiveStatus.MASTER_REGISTER_ROOM:
+                statusChildren.add(_StatusMessage("Register Room", _textStyle_UnexpectedError));
+                break;
+              case LiveStatus.PEER_REMOVED:
+                // TODO: Handle this case.
+                break;
+              case LiveStatus.MASTER_OFFER_POSTED:
+                statusChildren.add(_StatusMessage("Offer Posted", _textStyle_UnexpectedError));
+                break;
+              case LiveStatus.MASTER_ANSWER_ARRIVED:
+                statusChildren.add(_StatusMessage("Answer Arrived", _textStyle_UnexpectedError));
+                break;
+              case LiveStatus.MEDIA_ERROR:
+                // TODO: Handle this case.
                 break;
             }
 
-            if (liveStore.mediaStream != null)
+            print('liveStore.hasMediaStream: ${liveStore.hasMediaStream}');
+            if (liveStore.hasMediaStream)
             {
               var mediaRenderer = liveStore.mediaRenderer;
               print('> mediaRenderer.rotation: ${mediaRenderer.rotation}');

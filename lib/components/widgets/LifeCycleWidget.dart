@@ -2,28 +2,38 @@ import 'package:flutter/material.dart';
 
 typedef Disposer = void Function();
 
-class DisposableBuilder extends StatefulWidget {
-  const DisposableBuilder({
+class LifeCycleWidget extends StatefulWidget {
+  const LifeCycleWidget({
     Key key,
     @required this.builder,
     @required this.dispose,
     @required this.init,
+    this.reassemble,
   }) : assert(builder != null),
         super(key: key);
 
   final StatefulWidgetBuilder builder;
   final Disposer dispose;
+  final Function reassemble;
   final Function init;
 
   @override
-  _DisposableBuilderState createState() => _DisposableBuilderState();
+  _LifeCycleWidgetState createState() => _LifeCycleWidgetState();
 }
 
-class _DisposableBuilderState extends State<DisposableBuilder> {
+class _LifeCycleWidgetState extends State<LifeCycleWidget> {
   @override
   void initState() {
     super.initState();
     widget.init();
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    if (widget.reassemble != null) {
+      widget.reassemble();
+    }
   }
 
   @override

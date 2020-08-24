@@ -49,7 +49,10 @@ abstract class _RoomsStore with Store {
         }
         _onStatusChanged(RoomsStatus.READY);
       }
-      else _onStatusChanged(RoomsStatus.EMPTY);
+      else {
+        _onRoomsUpdated([]);
+        _onStatusChanged(RoomsStatus.EMPTY);
+      }
       print('> RoomsStore: roomsSubscription -> hasSelectedRoom: $hasSelectedRoom');
       if (hasSelectedRoom) onRoomSelected(selectedRoom.id);
     });
