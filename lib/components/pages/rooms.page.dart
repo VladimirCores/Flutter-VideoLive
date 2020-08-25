@@ -47,6 +47,7 @@ class RoomsPage extends StatelessWidget {
                     return Observer(builder: (_) {
                       final room = roomsStore.rooms[index];
                       final isRoomSelected = roomsStore.isRoomSelected(room);
+                      if (room.isCurrent) return Container();
                       return SelectableRoomWidget(
                         SelectableRoomWidgetViewModel(
                             room.id,

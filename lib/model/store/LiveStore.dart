@@ -24,7 +24,7 @@ abstract class _LiveStore with Store {
   PeersStore _peersStore = PeersStore();
   MediaStore _mediaStore = MediaStore();
 
-  RoomVO _room;
+  RoomVO room;
 
   RTCVideoRenderer get mediaRenderer => _mediaStore.mediaRenderer;
   bool get hasMediaStream => _mediaStore.hasStream;
@@ -62,7 +62,7 @@ abstract class _LiveStore with Store {
 
     final _roomsCollection = FirebaseFirestore.instance.collection('rooms');
     _roomDocument = isMaster ? _roomsCollection.doc() : _roomsCollection.doc(room.id);
-    _room = isMaster ? RoomVO(_roomDocument.id, 'ROOM DATA') : room;
+    this.room = isMaster ? RoomVO(_roomDocument.id, 'ROOM DATA') : room;
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.ROOM_SET);
 
@@ -85,14 +85,14 @@ abstract class _LiveStore with Store {
       _onLiveStatus(LiveStatus.MASTER_CAMERA_READY);
 
       await _roomDocument.set({ 'info': //TODO: Set real user data
-        { 'name': DateTime.now().toString() } });
+        { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID } });
       if (isRoomClosed) { dispose(false); return; }
       _onLiveStatus(LiveStatus.MASTER_REGISTER_ROOM);
       
       _masterStore = MasterStore();
       _masterStore.listenStatus(_onLiveStatus);
       _masterStore.onConnectionCreated(_mediaStore.addStream);
-      await _masterStore.initialize(_peersStore, _room.id);
+      await _masterStore.initialize(_peersStore, this.room.id);
     }
     else
     {
@@ -100,7 +100,7 @@ abstract class _LiveStore with Store {
         _clientStore = ClientStore();
         _clientStore.listenStatus(_onLiveStatus);
         _clientStore.onMediaArrived(_mediaStore.setStream);
-        await _clientStore.initialize(_peersStore, _room.id);
+        await _clientStore.initialize(_peersStore, this.room.id);
       }
       else _onLiveStatus(LiveStatus.CLIENT_ROOM_NOT_EXISTS);
     }
