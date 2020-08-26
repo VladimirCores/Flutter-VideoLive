@@ -56,6 +56,14 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
     final peerVO = _peers[peerID];
     peerVO.connection.onIceCandidate = null;
     peerVO.connection.onIceConnectionState = null;
+    peerVO.connection.onRenegotiationNeeded = null;
+    peerVO.connection.getLocalStreams().forEach((MediaStream stream) {
+      peerVO.connection.removeStream(stream);
+      stream.dispose();
+    });
+    peerVO.connection.getRemoteStreams().forEach((MediaStream stream) {
+      stream.dispose();
+    });
     peerVO.connection.close();
     peerVO.peerDocumentSubscription?.cancel();
     peerVO.iceSubscription?.cancel();
@@ -115,10 +123,16 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
       });
     };
 
+    peerConnection.onRenegotiationNeeded = () {
+      sendStatus(LiveStatus.RTC_NEGOTIATION_NEEDED);
+    };
     peerConnection.onIceConnectionState = (RTCIceConnectionState state) {
-      print('> PeerStore: $peerID -> onIceConnectionState: $state');
+      print('> PeerStore:$peerID -> onIceConnectionState: $state');
       if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         sendStatus(LiveStatus.ICE_FAILED);
+      }
+      else if (state == RTCIceConnectionState.RTCIceConnectionStateChecking) {
+        sendStatus(LiveStatus.ICE_CHECKING);
       }
       else if (state == RTCIceConnectionState.RTCIceConnectionStateConnected) {
         sendStatus(LiveStatus.ICE_CONNECTED);

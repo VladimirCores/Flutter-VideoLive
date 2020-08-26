@@ -85,7 +85,7 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
       sendStatus(LiveStatus.MEDIA_REMOTE_STREAM_ERROR_NO_RENDERED);
       throw 'MediaRenderer is not initialized';
     }
-    sendStatus(LiveStatus.MEDIA_REMOTE_STREAM_SET);
+    sendStatus(LiveStatus.MEDIA_RENDER_STREAM_SET);
     return Future.value(true);
   }
 

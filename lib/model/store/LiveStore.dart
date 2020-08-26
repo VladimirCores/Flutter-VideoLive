@@ -64,7 +64,7 @@ abstract class _LiveStore with Store {
     _roomDocument = isMaster ? _roomsCollection.doc() : _roomsCollection.doc(room.id);
     this.room = isMaster ? RoomVO(_roomDocument.id, 'ROOM DATA') : room;
     if (isRoomClosed) return dispose(false);
-    _onLiveStatus(LiveStatus.ROOM_SET);
+    _onLiveStatus(LiveStatus.ROOM_READY);
 
     print('> _roomDocument exists: ${(await _roomDocument.get()).exists}');
 
@@ -74,20 +74,21 @@ abstract class _LiveStore with Store {
 
     await _mediaStore.initialize();
     if (isRoomClosed) return dispose(false);
-    _onLiveStatus(LiveStatus.RENDERER_READY);
+    _onLiveStatus(LiveStatus.MEDIA_RENDERER_READY);
 
     try {
       await _mediaStore.createLocalStreamFromCamera();
     } catch (e) {
       print('> LiveStore -> createLocalStreamFromCamera error: $e');
     }
+    if (isRoomClosed) return dispose(false);
+    _onLiveStatus(LiveStatus.MEDIA_LOCAL_STREAM_FROM_CAMERA_READY);
 
     if (isMaster)
     {
       _mediaStore.setMediaRendererStream(_mediaStore.localStream);
-
       if (isRoomClosed) return dispose(false);
-      _onLiveStatus(LiveStatus.MASTER_LOCAL_STREAM_FROM_CAMERA_READY);
+      _onLiveStatus(LiveStatus.MASTER_SET_MEDIA_RENDERER_TO_CAMERA_STREAM);
 
       await _roomDocument.set({ 'info': //TODO: Set real user data
         { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID } });

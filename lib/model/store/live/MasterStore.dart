@@ -63,6 +63,7 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
             if (_isClosed) return dispose(false);
             sendStatus(LiveStatus.MASTER_PEER_FOR_CLIENT_CREATED);
 
+            await Future.delayed(Duration(milliseconds: 100));
             _onAttachMediaToPeer.sink.add(peerConnection);
             if (_isClosed) return dispose(false);
             sendStatus(LiveStatus.MEDIA_ATTACHED_TO_PEER);
@@ -70,13 +71,15 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
             peerVO.peerDocumentSubscription = peerDocument
               .snapshots().listen((DocumentSnapshot snapshot) async
               {
-                final requestingPeerID = snapshot.id;
-                print('> peerDocument.listen -> Got snapshot: $requestingPeerID - $peerID | ${snapshot.data().containsKey('answer')}');
-
                 if (!snapshot.exists && _peersStore.hasPeer(peerID)) {
                   _peersStore.unregisterAndClosePeer(peerID);
+                  peerVO.peerDocumentSubscription.cancel();
+                  peerVO.peerDocumentSubscription = null;
                   return;
                 }
+
+                final requestingPeerID = snapshot.id;
+                print('> peerDocument.listen -> Got snapshot: $requestingPeerID - $peerID | ${snapshot.data().containsKey('answer')}');
 
                 if (!snapshot.data().containsKey('answer')) return;
                 final answer = snapshot.data()['answer'];
@@ -86,10 +89,10 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
 
                 if (answer != null && _peersStore.hasPeer(peerID))
                 {
-                  await Future.delayed(Duration(microseconds: 1000));
+                  await Future.delayed(Duration(milliseconds: 100));
                   if (_isClosed) return dispose(false);
                   sendStatus(LiveStatus.MASTER_PEER_ANSWER_ARRIVED);
-                  await Future.delayed(Duration(microseconds: 1000));
+                  await Future.delayed(Duration(milliseconds: 100));
 
                   final rtcSessionDescription = RTCSessionDescription(answer['sdp'], answer['type']);
                   var connection = _peersStore.getPeer(peerID).connection;
@@ -102,11 +105,13 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
               }
             );
 
+            await Future.delayed(Duration(milliseconds: 100));
             RTCSessionDescription offer = await peerConnection.createOffer({});
             await peerConnection.setLocalDescription(offer);
             if (_isClosed) return dispose(false);
             sendStatus(LiveStatus.MASTER_PEER_LOCAL_DESCRIPTION_SET);
 
+            await Future.delayed(Duration(milliseconds: 100));
             await peerDocument.update({'offer':
             { 'type': offer.type, 'sdp': offer.sdp }});
             if (_isClosed) return dispose(false);

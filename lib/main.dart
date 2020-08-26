@@ -33,12 +33,21 @@ Future<void> main() async {
         if (snapshot.connectionState == ConnectionState.done) {
           return VideoLiveApp();
         }
-        return Container(width: 100, height: 100,
-          child: CircularProgressIndicator()
-        );
+        return Prepare();
       },
     )
   ));
+}
+
+class Prepare extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Container(width: 100, height: 100,
+          child: CircularProgressIndicator()
+      ),
+    );
+  }
 }
 
 class VideoLiveApp extends StatelessWidget {
