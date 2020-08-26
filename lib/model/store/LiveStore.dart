@@ -27,7 +27,7 @@ abstract class _LiveStore with Store {
   RoomVO room;
 
   RTCVideoRenderer get mediaRenderer => _mediaStore.mediaRenderer;
-  bool get hasMediaStream => _mediaStore.hasStream;
+  bool get hasMedia => _mediaStore.hasMediaRendererStream;
 
   @observable
   LiveStatus roomStatus;
@@ -76,15 +76,18 @@ abstract class _LiveStore with Store {
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.RENDERER_READY);
 
+    try {
+      await _mediaStore.createLocalStreamFromCamera();
+    } catch (e) {
+      print('> LiveStore -> createLocalStreamFromCamera error: $e');
+    }
+
     if (isMaster)
     {
-      try {
-        await _mediaStore.createStreamFromCamera();
-      } catch (e) {
-        print('> LiveStore -> createStreamFromCamera error: $e');
-      }
+      _mediaStore.setMediaRendererStream(_mediaStore.localStream);
+
       if (isRoomClosed) return dispose(false);
-      _onLiveStatus(LiveStatus.MASTER_CAMERA_READY);
+      _onLiveStatus(LiveStatus.MASTER_LOCAL_STREAM_FROM_CAMERA_READY);
 
       await _roomDocument.set({ 'info': //TODO: Set real user data
         { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID } });
@@ -93,7 +96,7 @@ abstract class _LiveStore with Store {
       
       _masterStore = MasterStore();
       _masterStore.listenStatus(_onLiveStatus);
-      _masterStore.onAttachMediaToPeer(_mediaStore.addStreamToPeer);
+      _masterStore.onAttachMediaToPeer(_mediaStore.addLocalStreamToPeer);
       await _masterStore.initialize(_peersStore, this.room.id);
     }
     else
@@ -101,7 +104,8 @@ abstract class _LiveStore with Store {
       if ((await _roomDocument.get()).exists) {
         _clientStore = ClientStore();
         _clientStore.listenStatus(_onLiveStatus);
-        _clientStore.onMediaArrived(_mediaStore.setRemoteStream);
+        _clientStore.onAttachMediaToPeer(_mediaStore.addLocalStreamToPeer);
+        _clientStore.onMediaArrived(_mediaStore.setMediaRendererStream);
         await _clientStore.initialize(_peersStore, this.room.id);
       }
       else _onLiveStatus(LiveStatus.CLIENT_ROOM_NOT_EXISTS);

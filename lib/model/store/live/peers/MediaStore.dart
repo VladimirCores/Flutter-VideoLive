@@ -25,13 +25,14 @@ class MediaStore = _MediaStore with _$MediaStore;
 
 abstract class _MediaStore with Store, LiveStatusDispatcher {
 
-  MediaStream _mediaStream;
-  MediaStream get mediaStream => _mediaStream;
+  MediaStream _localStream;
+  MediaStream get localStream => _localStream;
 
   RTCVideoRenderer _mediaRenderer;
   RTCVideoRenderer get mediaRenderer => _mediaRenderer;
 
-  bool get hasStream => _mediaStream != null;
+  bool get hasLocalStream => _localStream != null;
+  bool get hasMediaRendererStream => _mediaRenderer != null && _mediaRenderer.src != null;
   
   _MediaStore();
 
@@ -42,22 +43,22 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
     _mediaRenderer.mirror = true;
   }
 
-  Future<void> addStreamToPeer(RTCPeerConnection connection) async {
-    print('> MediaStore -> addStream: hasStream = $hasStream');
+  Future<void> addLocalStreamToPeer(RTCPeerConnection connection) async {
+    print('> MediaStore -> addStream: hasStream = $hasLocalStream');
     print('> MediaStore -> addStream: connection = $connection');
-    if (hasStream) {
-      await _mediaStream.getMediaTracks();
-      _mediaStream.getVideoTracks().forEach((track) async {
+    if (hasLocalStream) {
+      await _localStream.getMediaTracks();
+      _localStream.getVideoTracks().forEach((track) async {
         print('> \t\t: video track = ${track.kind}');
-        await connection.addTrack(track, [_mediaStream.id]);
+        await connection.addTrack(track, [_localStream.id]);
       });
-      _mediaStream.getAudioTracks().forEach((track) async {
+      _localStream.getAudioTracks().forEach((track) async {
         print('> \t\t: audio track = ${track.kind}');
-        await connection.addTrack(track, [_mediaStream.id]);
+        await connection.addTrack(track, [_localStream.id]);
       });
-      connection.getRemoteStreams().add(_mediaStream);
-      connection.getLocalStreams().add(_mediaStream);
-      await connection.addStream(_mediaStream);
+      connection.getRemoteStreams().add(_localStream);
+      connection.getLocalStreams().add(_localStream);
+      await connection.addStream(_localStream);
     }
     else {
       sendStatus(LiveStatus.MEDIA_ERROR_NO_STREAM_TO_ADD);
@@ -66,42 +67,43 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
   }
 
   Future<void> setLocalStream(MediaStream stream) async {
-    
-  }
-
-  Future<void> setRemoteStream(MediaStream stream) async {
-    print('> MediaStore -> setRemoteStream: can be set = ${_mediaStream != stream && _mediaRenderer != null}');
-    if (_mediaStream != stream) {
-      if (stream == null) _mediaStream?.dispose();
-
-      _mediaStream = stream;
-
-      if (_mediaRenderer != null) {
-        _mediaRenderer.srcObject = stream;
-      } else {
-        sendStatus(LiveStatus.MEDIA_ERROR_NO_RENDERED);
-        throw 'MediaRenderer is not ready';
-      }
+    print('> MediaStore -> setLocalStream: can be set = ${_localStream != stream}');
+    if (_localStream != stream) {
+      if (stream == null) _localStream?.dispose();
+      _localStream = stream;
     } else {
       sendStatus(LiveStatus.MEDIA_ERROR_SAME_STREAM);
       throw 'Same stream cant be set to MediaRenderer';
     }
-    sendStatus(LiveStatus.MEDIA_STORE_STREAM_SET);
+  }
+
+  Future<void> setMediaRendererStream(MediaStream stream) async {
+    print('> MediaStore -> setMediaRendererStream: can be set = ${_mediaRenderer != null}');
+    if (_mediaRenderer != null) {
+      _mediaRenderer.srcObject = stream;
+    } else {
+      sendStatus(LiveStatus.MEDIA_REMOTE_STREAM_ERROR_NO_RENDERED);
+      throw 'MediaRenderer is not initialized';
+    }
+    sendStatus(LiveStatus.MEDIA_REMOTE_STREAM_SET);
     return Future.value(true);
   }
 
-  Future<void> createStreamFromCamera({params}) async {
+  Future<void> createLocalStreamFromCamera({params}) async {
     var stream = await navigator.getUserMedia(_DEFAULT_MEDIA_STREAM_PARAMS);
-    return setRemoteStream(stream);
+    return setLocalStream(stream);
   }
 
   @override
   void dispose(manual) {
-    if (_mediaStream != null) {
-      _mediaStream?.dispose();
-      _mediaStream = null;
+    if (_localStream != null) {
+      _localStream?.dispose();
+      _localStream = null;
     }
-    _mediaRenderer.srcObject = null;
+    if (_mediaRenderer != null) {
+      _mediaRenderer.srcObject = null;
+      _mediaRenderer.dispose();
+    }
     super.dispose(manual);
   }
 }

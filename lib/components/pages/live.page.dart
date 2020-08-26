@@ -55,8 +55,8 @@ class LivePage extends StatelessWidget {
               _statusChildren.add(_StatusMessage(roomStatus.toString(), _textStyle_Message));
               // checkStatus(roomStatus);
 
-              print('liveStore.hasMediaStream: ${liveStore.hasMediaStream}');
-              if (liveStore.hasMediaStream)
+              print('liveStore.hasMediaStream: ${liveStore.hasMedia}');
+              if (liveStore.hasMedia)
               {
                 var mediaRenderer = liveStore.mediaRenderer;
                 print('> mediaRenderer.rotation: ${mediaRenderer.rotation}');
@@ -130,7 +130,7 @@ class LivePage extends StatelessWidget {
       case LiveStatus.MASTER_REGISTER_ROOM:
         _statusChildren.add(_StatusMessage("Room Owner", _textStyle_Message));
         break;
-      case LiveStatus.MASTER_CAMERA_READY:
+      case LiveStatus.MASTER_LOCAL_STREAM_FROM_CAMERA_READY:
         _statusChildren.add(_StatusMessage("Camera Ready", _textStyle_Message));
         break;
       case LiveStatus.ROOM_SET:
@@ -158,7 +158,7 @@ class LivePage extends StatelessWidget {
       case LiveStatus.CLIENT_ANSWER_POSTED:
         _statusChildren.add(_StatusMessage("Answer Posted", _textStyle_Message));
         break;
-      case LiveStatus.MEDIA_STORE_STREAM_SET:
+      case LiveStatus.MEDIA_REMOTE_STREAM_SET:
         _statusChildren.add(_StatusMessage("Media Arrived", _textStyle_Ready));
         break;
       case LiveStatus.MEDIA_ATTACHED_TO_PEER:

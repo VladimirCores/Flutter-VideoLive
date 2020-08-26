@@ -20,6 +20,10 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
   var _onAttachMediaToPeer = StreamController<RTCPeerConnection>();
   get onAttachMediaToPeer => _onAttachMediaToPeer.stream.listen;
 
+  // ignore: close_sinks
+  var _onMediaStreamArrived = StreamController<MediaStream>();
+  get onMediaArrived => _onMediaStreamArrived.stream.listen;
+
   bool _isReady = false;
   bool _isClosed = false;
   set closed(bool value) => _isClosed = value;

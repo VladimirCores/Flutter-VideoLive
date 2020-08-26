@@ -15,6 +15,10 @@ class ClientStore = _ClientStore with _$ClientStore;
 abstract class _ClientStore with Store, LiveStatusDispatcher {
 
   // ignore: close_sinks
+  var _onAttachMediaToPeer = StreamController<RTCPeerConnection>();
+  get onAttachMediaToPeer => _onAttachMediaToPeer.stream.listen;
+
+  // ignore: close_sinks
   var _onMediaStreamArrived = StreamController<MediaStream>();
   get onMediaArrived => _onMediaStreamArrived.stream.listen;
 
@@ -70,25 +74,26 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
         {
           sendStatus(LiveStatus.CLIENT_OFFER_RECEIVED);
 
-          final connection = peerVO.connection;
+          final peerConnection = peerVO.connection;
           print('> \t3. Listen for media tracks');
 
-          connection.onAddTrack = (MediaStream stream, MediaStreamTrack track) {
+          _onAttachMediaToPeer.sink.add(peerConnection);
+          peerConnection.onAddTrack = (MediaStream stream, MediaStreamTrack track) {
             print('>>>> onAddTrack');
           };
-          connection.onAddStream = _onMediaStreamArrived.sink.add;
-          connection.onRemoveStream = _onMediaStreamArrived.sink.add;
+          peerConnection.onAddStream = _onMediaStreamArrived.sink.add;
+          peerConnection.onRemoveStream = _onMediaStreamArrived.sink.add;
 
           print('> \t4.1 Register offer: ${offer['type']}');
           final remoteSessionDescription = RTCSessionDescription(offer['sdp'], offer['type']);
-          await connection.setRemoteDescription(remoteSessionDescription);
+          await peerConnection.setRemoteDescription(remoteSessionDescription);
 
           if (_isClosed) return dispose(false);
           sendStatus(LiveStatus.REMOTE_DESCRIPTION_SET);
 
           print('> \t4.2 Answer created');
-          final answer = await connection.createAnswer({});
-          connection.setLocalDescription(answer);
+          final answer = await peerConnection.createAnswer({});
+          peerConnection.setLocalDescription(answer);
 
           if (_isClosed) return dispose(false);
           sendStatus(LiveStatus.LOCAL_DESCRIPTION_SET);
