@@ -101,8 +101,13 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
       _localStream = null;
     }
     if (_mediaRenderer != null) {
-      _mediaRenderer.srcObject = null;
-      _mediaRenderer.dispose();
+      try {
+        if (_mediaRenderer.src != null) {
+          _mediaRenderer.src.dispose();
+          _mediaRenderer.srcObject = null;
+        }
+      } catch (e) { }
+      _mediaRenderer = null;
     }
     super.dispose(manual);
   }

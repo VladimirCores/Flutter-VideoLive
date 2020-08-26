@@ -16,8 +16,12 @@ const PEERS_COLLECTION = 'peers';
 
 Map<String, dynamic> _iceServers = {
   'iceServers': [
-    {'url': 'stun:stun1.l.google.com:19302'},
-    {'url': 'stun:stun2.l.google.com:19302'},
+    {'url': 'stun:stun.liveo.fr:3478'},
+//    {'url': 'stun:stun1.l.google.com:19302'},
+//    {'url': 'stun:stun2.l.google.com:19302'},
+//    {'url': 'stun:stun3.l.google.com:19302'},
+//    {'url': 'stun:stun4.l.google.com:19302'},
+//    {'url': 'stun:stunserver.org:3478'},
   ]
 };
 
@@ -57,13 +61,6 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
     peerVO.connection.onIceCandidate = null;
     peerVO.connection.onIceConnectionState = null;
     peerVO.connection.onRenegotiationNeeded = null;
-    peerVO.connection.getLocalStreams().forEach((MediaStream stream) {
-      peerVO.connection.removeStream(stream);
-      stream.dispose();
-    });
-    peerVO.connection.getRemoteStreams().forEach((MediaStream stream) {
-      stream.dispose();
-    });
     peerVO.connection.close();
     peerVO.peerDocumentSubscription?.cancel();
     peerVO.iceSubscription?.cancel();
@@ -111,7 +108,7 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
   }) async {
     String peerID = peerDoc.id;
 
-    final peerConnection = await createPeerConnection(_iceServers, {});
+    final peerConnection = await createPeerConnection(_iceServers, null);
     final result = PeerVO(peerID, roomID, peerConnection);
 
     peerConnection.onIceCandidate = (RTCIceCandidate iceCandidate) {
@@ -130,6 +127,12 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
       print('> PeerStore:$peerID -> onIceConnectionState: $state');
       if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         sendStatus(LiveStatus.ICE_FAILED);
+      }
+      else if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {
+        sendStatus(LiveStatus.ICE_DISCONNECTED);
+      }
+      else if (state == RTCIceConnectionState.RTCIceConnectionStateClosed) {
+        sendStatus(LiveStatus.ICE_CLOSED);
       }
       else if (state == RTCIceConnectionState.RTCIceConnectionStateChecking) {
         sendStatus(LiveStatus.ICE_CHECKING);

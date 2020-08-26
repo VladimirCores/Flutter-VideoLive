@@ -88,7 +88,7 @@ abstract class _LiveStore with Store {
     {
       _mediaStore.setMediaRendererStream(_mediaStore.localStream);
       if (isRoomClosed) return dispose(false);
-      _onLiveStatus(LiveStatus.MASTER_SET_MEDIA_RENDERER_TO_CAMERA_STREAM);
+      _onLiveStatus(LiveStatus.MASTER_SET_MEDIA_RENDERER_STREAM);
 
       await _roomDocument.set({ 'info': //TODO: Set real user data
         { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID } });
