@@ -8,6 +8,8 @@ class PeerVO {
   StreamSubscription peerDocumentSubscription;
   String id;
   String roomID;
+  bool isLocalConnectionSet;
+  bool isRemoteConnectionSet;
 
   PeerVO(this.id, this.roomID, this.connection);
 }

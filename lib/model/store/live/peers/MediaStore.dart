@@ -42,16 +42,35 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
     _mediaRenderer.mirror = true;
   }
 
-  Future<void> addStream(RTCPeerConnection connection) async {
-    if (hasStream) await connection.addStream(_mediaStream);
+  Future<void> addStreamToPeer(RTCPeerConnection connection) async {
+    print('> MediaStore -> addStream: hasStream = $hasStream');
+    print('> MediaStore -> addStream: connection = $connection');
+    if (hasStream) {
+      await _mediaStream.getMediaTracks();
+      _mediaStream.getVideoTracks().forEach((track) async {
+        print('> \t\t: video track = ${track.kind}');
+        await connection.addTrack(track, [_mediaStream.id]);
+      });
+      _mediaStream.getAudioTracks().forEach((track) async {
+        print('> \t\t: audio track = ${track.kind}');
+        await connection.addTrack(track, [_mediaStream.id]);
+      });
+      connection.getRemoteStreams().add(_mediaStream);
+      connection.getLocalStreams().add(_mediaStream);
+      await connection.addStream(_mediaStream);
+    }
     else {
       sendStatus(LiveStatus.MEDIA_ERROR_NO_STREAM_TO_ADD);
       throw 'No media stream to attach to connection';
     }
   }
 
-  Future<void> setStream(MediaStream stream) async {
-    print('> MediaStore -> setStream: can be set = ${_mediaStream != stream && _mediaRenderer != null}');
+  Future<void> setLocalStream(MediaStream stream) async {
+    
+  }
+
+  Future<void> setRemoteStream(MediaStream stream) async {
+    print('> MediaStore -> setRemoteStream: can be set = ${_mediaStream != stream && _mediaRenderer != null}');
     if (_mediaStream != stream) {
       if (stream == null) _mediaStream?.dispose();
 
@@ -67,13 +86,13 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
       sendStatus(LiveStatus.MEDIA_ERROR_SAME_STREAM);
       throw 'Same stream cant be set to MediaRenderer';
     }
-    sendStatus(LiveStatus.MEDIA_ARRIVED);
+    sendStatus(LiveStatus.MEDIA_STORE_STREAM_SET);
     return Future.value(true);
   }
 
   Future<void> createStreamFromCamera({params}) async {
     var stream = await navigator.getUserMedia(_DEFAULT_MEDIA_STREAM_PARAMS);
-    return setStream(stream);
+    return setRemoteStream(stream);
   }
 
   @override

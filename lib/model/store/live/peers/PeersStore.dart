@@ -49,20 +49,59 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
     _peers.clear();
   }
 
-  bool hasPeer(peerID) { return _peers.containsKey(peerID); }
-  PeerVO getPeer(peerID) { return _peers[peerID]; }
-  void unregisterAndClosePeer(peerID) {
-    _peers[peerID].connection.close();
-    _peers[peerID].peerDocumentSubscription?.cancel();
-    _peers[peerID].iceSubscription?.cancel();
+  bool hasPeer(String peerID) { return _peers.containsKey(peerID); }
+  PeerVO getPeer(String peerID) { return _peers[peerID]; }
+  void unregisterAndClosePeer(String peerID) {
+    if (!hasPeer(peerID)) return;
+    final peerVO = _peers[peerID];
+    peerVO.connection.onIceCandidate = null;
+    peerVO.connection.onIceConnectionState = null;
+    peerVO.connection.close();
+    peerVO.peerDocumentSubscription?.cancel();
+    peerVO.iceSubscription?.cancel();
+    cleanPeerData(peerID);
     _peers.remove(peerID);
   }
   
-  Future<PeerVO> registerPeer(DocumentReference peerDoc, String roomID) async
+  Future<PeerVO> registerMasterPeer(String peerID, String roomID) async
   {
+  DocumentReference peerDoc = peersCollection.doc(peerID);
+    return _registerPeer(
+        iceCollectionToPost: peerDoc.collection(MASTER_ICE_COLLECTION),
+        iceCollectionToListen: peerDoc.collection(CLIENT_ICE_COLLECTION),
+        peerDoc: peerDoc,
+        roomID: roomID
+    );
+  }
+
+  Future<PeerVO> registerClientPeer(DocumentReference peerDoc, String roomID) async
+  {
+    return _registerPeer(
+        iceCollectionToPost: peerDoc.collection(CLIENT_ICE_COLLECTION),
+        iceCollectionToListen: peerDoc.collection(MASTER_ICE_COLLECTION),
+        peerDoc: peerDoc,
+        roomID: roomID
+    );
+  }
+
+  Future<void> cleanPeerData(String peerID) async {
+    final peerDocRef = peersCollection.doc(peerID);
+    if (peerDocRef != null) {
+      final clientICE = peerDocRef.collection(CLIENT_ICE_COLLECTION);
+      if (clientICE != null) await clientICE.get()..docs.clear();
+      final masterICE = peerDocRef.collection(MASTER_ICE_COLLECTION);
+      if (masterICE != null) await masterICE.get()..docs.clear();
+      await peerDocRef.delete();
+    }
+  }
+
+  Future<PeerVO> _registerPeer({
+    CollectionReference iceCollectionToPost,
+    CollectionReference iceCollectionToListen,
+    DocumentReference peerDoc,
+    String roomID
+  }) async {
     String peerID = peerDoc.id;
-    CollectionReference iceCollectionToPost = peerDoc.collection(CLIENT_ICE_COLLECTION);
-    CollectionReference iceCollectionToListen = peerDoc.collection(MASTER_ICE_COLLECTION);
 
     final peerConnection = await createPeerConnection(_iceServers, {});
     final result = PeerVO(peerID, roomID, peerConnection);
@@ -97,20 +136,8 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
       });
     });
 
-
     _peers[peerID] = result;
 
     return result;
-  }
-
-  Future<void> cleanPeerData(String peerID) async {
-    final peerDocRef = peersCollection.doc(peerID);
-    if (peerDocRef != null) {
-      final clientICE = peerDocRef.collection(CLIENT_ICE_COLLECTION);
-      if (clientICE != null) await clientICE.get()..docs.clear();
-      final masterICE = peerDocRef.collection(MASTER_ICE_COLLECTION);
-      if (masterICE != null) await masterICE.get()..docs.clear();
-      await peerDocRef.delete();
-    }
   }
 }

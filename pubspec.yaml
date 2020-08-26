@@ -27,6 +27,7 @@ dependencies:
   firebase_core:
   cloud_firestore:
   flutter_webrtc:
+    path: "./plugins/flutter-webrtc"
   flutter_mobx:
   mobx:
   provider:

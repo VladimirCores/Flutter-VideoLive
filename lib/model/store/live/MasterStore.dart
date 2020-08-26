@@ -17,8 +17,8 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
   StreamSubscription _peersCollectionSubscription;
 
   // ignore: close_sinks
-  var _onConnectionCreated = StreamController<RTCPeerConnection>();
-  get onConnectionCreated => _onConnectionCreated.stream.listen;
+  var _onAttachMediaToPeer = StreamController<RTCPeerConnection>();
+  get onAttachMediaToPeer => _onAttachMediaToPeer.stream.listen;
 
   bool _isReady = false;
   bool _isClosed = false;
@@ -46,7 +46,6 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
         if (peerChange.type == DocumentChangeType.removed) {
           if (_peersStore.hasPeer(peerID)) {
             _peersStore.unregisterAndClosePeer(peerID);
-            _peersStore.cleanPeerData(peerID);
             if (_isClosed) return dispose(false);
             sendStatus(LiveStatus.MASTER_PEER_REMOVED);
           }
@@ -54,59 +53,60 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
         else if (peerChange.type == DocumentChangeType.added)
         {
           if (!_peersStore.hasPeer(peerID)) {
-            print('====> start new registration');
-            DocumentReference peerDoc = _peersStore.peersCollection.doc(peerID);
-            print('> \t. Create RTC connection client');
-            PeerVO peerVO = await _peersStore.registerPeer(peerDoc, roomID);
+            DocumentReference peerDocument = _peersStore.peersCollection.doc(peerID);
+            PeerVO peerVO = await _peersStore.registerMasterPeer(peerID, roomID);
+            RTCPeerConnection peerConnection = peerVO.connection;
             if (_isClosed) return dispose(false);
-            sendStatus(LiveStatus.CLIENT_PEER_CREATED);
+            sendStatus(LiveStatus.MASTER_PEER_FOR_CLIENT_CREATED);
 
-            print('> \t. Add media stream');
-            _onConnectionCreated.sink.add(peerVO.connection);
-
+            _onAttachMediaToPeer.sink.add(peerConnection);
             if (_isClosed) return dispose(false);
-            sendStatus(LiveStatus.MASTER_MEDIA_ATTACHED_TO_PEER);
+            sendStatus(LiveStatus.MEDIA_ATTACHED_TO_PEER);
 
-            peerVO.peerDocumentSubscription = peerDoc
-            .snapshots().listen((DocumentSnapshot snapshot) async
-            {
-              final requestingPeerID = snapshot.id;
-              if (!snapshot.exists
-                && _peersStore.hasPeer(requestingPeerID)) {
-                _peersStore.unregisterAndClosePeer(peerID);
-                _peersStore.cleanPeerData(peerID);
-                return;
+            peerVO.peerDocumentSubscription = peerDocument
+              .snapshots().listen((DocumentSnapshot snapshot) async
+              {
+                final requestingPeerID = snapshot.id;
+                print('> peerDocument.listen -> Got snapshot: $requestingPeerID - $peerID | ${snapshot.data().containsKey('answer')}');
+
+                if (!snapshot.exists && _peersStore.hasPeer(peerID)) {
+                  _peersStore.unregisterAndClosePeer(peerID);
+                  return;
+                }
+
+                if (!snapshot.data().containsKey('answer')) return;
+                final answer = snapshot.data()['answer'];
+
+                print('> peerDocument.listen -> Got remote answer, '
+                    'has peer ${_peersStore.hasPeer(peerID)}');
+
+                if (answer != null && _peersStore.hasPeer(peerID))
+                {
+                  await Future.delayed(Duration(microseconds: 1000));
+                  if (_isClosed) return dispose(false);
+                  sendStatus(LiveStatus.MASTER_PEER_ANSWER_ARRIVED);
+                  await Future.delayed(Duration(microseconds: 1000));
+
+                  final rtcSessionDescription = RTCSessionDescription(answer['sdp'], answer['type']);
+                  var connection = _peersStore.getPeer(peerID).connection;
+                  await connection.setRemoteDescription(rtcSessionDescription);
+                  _peersStore.getPeer(requestingPeerID).isRemoteConnectionSet = true;
+
+                  if (_isClosed) return dispose(false);
+                  sendStatus(LiveStatus.MASTER_PEER_REMOTE_DESCRIPTION_SET);
+                }
               }
+            );
 
-              final data = snapshot.data();
-              final answer = data['answer'];
-
-              print('> peerDocument.listen: has snapshot: $requestingPeerID');
-              if (answer != null) {
-                if (_isClosed) return dispose(false);
-                sendStatus(LiveStatus.MASTER_ANSWER_ARRIVED);
-
-                print('> peerDocument.listen -> Got remote answer: $answer');
-                final rtcSessionDescription = RTCSessionDescription(answer['sdp'], answer['type']);
-                await _peersStore.getPeer(requestingPeerID).connection.setRemoteDescription(rtcSessionDescription);
-
-                if (_isClosed) return dispose(false);
-                sendStatus(LiveStatus.REMOTE_DESCRIPTION_SET);
-              }
-            });
-
-            RTCSessionDescription offer = await peerVO.connection.createOffer({});
-            await peerVO.connection.setLocalDescription(offer);
-
+            RTCSessionDescription offer = await peerConnection.createOffer({});
+            await peerConnection.setLocalDescription(offer);
             if (_isClosed) return dispose(false);
-            sendStatus(LiveStatus.LOCAL_DESCRIPTION_SET);
+            sendStatus(LiveStatus.MASTER_PEER_LOCAL_DESCRIPTION_SET);
 
-            await peerDoc.update({'offer':
-            { 'type': offer.type, 'sdp': offer.sdp },
-            });
-
+            await peerDocument.update({'offer':
+            { 'type': offer.type, 'sdp': offer.sdp }});
             if (_isClosed) return dispose(false);
-            sendStatus(LiveStatus.MASTER_OFFER_POSTED);
+            sendStatus(LiveStatus.MASTER_PEER_OFFER_POSTED);
           }
         }
       });
@@ -115,8 +115,9 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
 
   @override
   void dispose(manual) {
-    _onConnectionCreated.close();
-    _onConnectionCreated = null;
+    sendStatus(LiveStatus.MASTER_DISPOSE);
+    _onAttachMediaToPeer.close();
+    _onAttachMediaToPeer = null;
     _peersCollectionSubscription?.cancel();
     _peersCollectionSubscription = null;
     _isClosed = true;

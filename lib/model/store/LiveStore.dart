@@ -32,7 +32,7 @@ abstract class _LiveStore with Store {
   @observable
   LiveStatus roomStatus;
   @action void _onLiveStatus(LiveStatus status) {
-    print('> LiveStore -> _onLiveStatusChanged: $status');
+    print('> LiveStore -> $status');
     if (this.roomStatus != status)
       this.roomStatus = status;
   }
@@ -80,7 +80,9 @@ abstract class _LiveStore with Store {
     {
       try {
         await _mediaStore.createStreamFromCamera();
-      } catch (e) { }
+      } catch (e) {
+        print('> LiveStore -> createStreamFromCamera error: $e');
+      }
       if (isRoomClosed) return dispose(false);
       _onLiveStatus(LiveStatus.MASTER_CAMERA_READY);
 
@@ -91,7 +93,7 @@ abstract class _LiveStore with Store {
       
       _masterStore = MasterStore();
       _masterStore.listenStatus(_onLiveStatus);
-      _masterStore.onConnectionCreated(_mediaStore.addStream);
+      _masterStore.onAttachMediaToPeer(_mediaStore.addStreamToPeer);
       await _masterStore.initialize(_peersStore, this.room.id);
     }
     else
@@ -99,7 +101,7 @@ abstract class _LiveStore with Store {
       if ((await _roomDocument.get()).exists) {
         _clientStore = ClientStore();
         _clientStore.listenStatus(_onLiveStatus);
-        _clientStore.onMediaArrived(_mediaStore.setStream);
+        _clientStore.onMediaArrived(_mediaStore.setRemoteStream);
         await _clientStore.initialize(_peersStore, this.room.id);
       }
       else _onLiveStatus(LiveStatus.CLIENT_ROOM_NOT_EXISTS);
@@ -107,8 +109,9 @@ abstract class _LiveStore with Store {
   }
 
   void dispose(bool isClosed) async {
+    if (roomStatus == LiveStatus.CLOSED) return;
     try {
-      roomStatus = isClosed ? LiveStatus.CLOSED : LiveStatus.DISPOSED;
+      roomStatus = LiveStatus.CLOSED;
       _peersStore.clean();
       _mediaStore.dispose(isClosed);
       if (isMaster) _roomDocument.delete();

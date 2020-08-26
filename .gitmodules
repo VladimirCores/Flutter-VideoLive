@@ -1,0 +1,3 @@
+[submodule "plugins/flutter-webrtc"]
+	path = plugins/flutter-webrtc
+	url = ../../flutter-webrtc/flutter-webrtc

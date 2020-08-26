@@ -17,7 +17,7 @@ class RoomsStore = _RoomsStore with _$RoomsStore;
 
 abstract class _RoomsStore with Store {
 
-  CollectionReference _roomsColRef = FirebaseFirestore.instance.collection('rooms');
+  CollectionReference _roomsCollection = FirebaseFirestore.instance.collection('rooms');
   StreamSubscription _roomsSubscription;
 
   bool isRoomSelected(room) { return selectedRoom == room; }
@@ -36,7 +36,7 @@ abstract class _RoomsStore with Store {
   List<RoomVO> rooms;
 
   _RoomsStore() {
-    _roomsSubscription = _roomsColRef.snapshots().listen((QuerySnapshot snapshot) {
+    _roomsSubscription = _roomsCollection.snapshots().listen((QuerySnapshot snapshot) {
       final docs = snapshot.docs;
       print('> RoomsStore: roomsSubscription -> isEmpty: ${docs.isEmpty}');
       if (docs.isNotEmpty) {

@@ -18,6 +18,10 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
   var _onMediaStreamArrived = StreamController<MediaStream>();
   get onMediaArrived => _onMediaStreamArrived.stream.listen;
 
+  // ignore: close_sinks
+  var _onMediaTrackArrived = StreamController<MediaStreamTrack>();
+  get onMediaTrackArrived => _onMediaTrackArrived.stream.listen;
+
   bool _isReady = false;
   bool _isClosed = false;
   set closed(bool value) => _isClosed = value;
@@ -32,16 +36,16 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
       PeersStore _peersStore,
       String roomID) async
   {
-    DocumentReference peerDoc = _peersStore.peersCollection.doc();
+    DocumentReference peerDocument = _peersStore.peersCollection.doc();
     print('> ClientStore -> ======= Join room: $roomID');
 
     print('> \t0. Create peer');
-    final peerVO = await _peersStore.registerPeer(peerDoc, roomID);
+    final peerVO = await _peersStore.registerClientPeer(peerDocument, roomID);
     if(_isClosed) return dispose(false);
     sendStatus(LiveStatus.CLIENT_PEER_CREATED);
 
     print('> \t1. Register peer');
-    await peerDoc.set({ 'info': { 'name': DateTime.now().toString()}});
+    await peerDocument.set({ 'info': { 'name': DateTime.now().toString()}});
 
     if (_isClosed) return dispose(false);
     sendStatus(LiveStatus.CLIENT_PEER_REGISTERED);
@@ -49,17 +53,17 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
     print('> \t2. Save peer in a collection');
 
     peerVO.peerDocumentSubscription =
-      peerDoc.snapshots().listen((
-          DocumentSnapshot peerDocSnapshot) async {
-        if (!peerDocSnapshot.exists || _isClosed) {
+      peerDocument.snapshots().listen((
+          DocumentSnapshot peerDocumentSnapshot) async {
+        if (!peerDocumentSnapshot.exists || _isClosed) {
           return dispose(false);
         }
 
-        final data = peerDocSnapshot.data();
+        final data = peerDocumentSnapshot.data();
         final answer = data['answer'];
         final offer = data['offer'];
 
-        print('> -> peerDocument.listen: has snapshot: ${peerDocSnapshot.id}');
+        print('> -> peerDocument.listen: has snapshot: ${peerDocumentSnapshot.id}');
         print('> -> update: offer|answer (${offer != null}|${answer != null})');
 
         if (offer != null && answer == null)
@@ -69,6 +73,9 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
           final connection = peerVO.connection;
           print('> \t3. Listen for media tracks');
 
+          connection.onAddTrack = (MediaStream stream, MediaStreamTrack track) {
+            print('>>>> onAddTrack');
+          };
           connection.onAddStream = _onMediaStreamArrived.sink.add;
           connection.onRemoveStream = _onMediaStreamArrived.sink.add;
 
@@ -87,7 +94,7 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
           sendStatus(LiveStatus.LOCAL_DESCRIPTION_SET);
 
           print('> \t5. Post answer to the peer document');
-          await peerDoc.update({'answer':
+          await peerDocument.update({'answer':
           { 'type': answer.type, 'sdp': answer.sdp}});
 
           if (_isClosed) return dispose(false);
