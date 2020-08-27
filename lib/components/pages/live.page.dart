@@ -7,18 +7,13 @@ import 'package:flutter_videolive/model/vo/RoomVO.dart';
 import 'package:flutter_webrtc/rtc_video_view.dart';
 import 'package:provider/provider.dart';
 
-List<Widget> _statusChildren;
-Widget _videoWidget;
-Widget _spinnerWidget;
+import 'live/live.client.widget.dart';
+import 'live/live.master.widget.dart';
 
 class LivePage extends StatelessWidget {
 
   final RoomVO roomVO;
-  LivePage(this.roomVO) {
-    _statusChildren = <Widget>[];
-    _spinnerWidget = null;
-    _videoWidget = null;
-  }
+  LivePage(this.roomVO);
 
   static const _textStyle_Message = TextStyle(color: Colors.red, fontSize: 13.0);
   static const _textStyle_UnexpectedError = TextStyle(color: Colors.red, fontSize: 24.0);
@@ -27,64 +22,38 @@ class LivePage extends StatelessWidget {
   @override
   Widget build(BuildContext ctx) {
     List<Widget> stackChildren = [];
-    final screenWidth = MediaQuery.of(ctx).size.width;
-    final screenHeight = MediaQuery.of(ctx).size.height;
     print('STACK CHILDREN: $stackChildren');
-    return Scaffold(
-    body: Container(
-      width: screenWidth,
-      height: screenHeight,
-      color: Colors.black26,
-      alignment: Alignment.topLeft,
-      child: Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
-        return WillPopScope(
+    return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
+      return Scaffold(
+        floatingActionButton: Observer(builder: (_) {
+          return FloatingActionButton.extended(
+            label: Text(liveStore.isMaster ? 'Stop' : 'Leave'),
+            onPressed: () => _onBackPressed(_, liveStore),
+            icon: Icon(liveStore.isMaster ? Icons.close : Icons.exit_to_app),
+            backgroundColor: Colors.redAccent,
+          );
+        }),
+        body: WillPopScope(
           onWillPop: () => _onBackPressed(ctx, liveStore),
           child: LifeCycleWidget(
-//            reassemble: () => liveStore.dispose(true),
-            init: () => liveStore.initialize(roomVO),
+            init: () async => await liveStore.initialize(roomVO),
             dispose: () async => liveStore.dispose(true),
-            builder: (dct, ss) => Observer(builder: (ost) {
-              print('< LivePage: LiveStatus = ${liveStore.roomStatus}');
-              final roomStatus = liveStore.roomStatus;
-              if (
-                  roomStatus == LiveStatus.MASTER_PEER_FOR_CLIENT_CREATED
-              )
-              {
-                _statusChildren.clear();
-              }
-              _statusChildren.add(_StatusMessage(roomStatus.toString(), _textStyle_Message));
-              // checkStatus(roomStatus);
-
-              print('liveStore.hasMediaStream: ${liveStore.hasMedia}');
-              if (liveStore.hasMedia)
-              {
-                var mediaRenderer = liveStore.mediaRenderer;
-                print('> mediaRenderer.rotation: ${mediaRenderer.rotation}');
-                stackChildren.add(
-                  Container(width: screenWidth, height: screenHeight,
-                      child: RTCVideoView(mediaRenderer)),
-                );
-              }
-
-              if (_spinnerWidget != null) stackChildren.add(_spinnerWidget);
-              stackChildren.add(ListView(children:_statusChildren));
-
-              print('videoWidget: $_videoWidget');
-              print('statusChildren: $_statusChildren');
-
-              return Stack(children: stackChildren);
-              },
-            ),
+            builder: (dct, ss) => (
+              liveStore.isMaster
+              ? LiveMaster()
+              : LiveClient()
+            )
           ),
-        );
-      })
-    ),
-  );}
+        )
+      );
+    });
+  }
 
-  Future<bool> _onBackPressed(context, liveStore) {
-    liveStore.dispose(true);
+  Future<bool> _onBackPressed(context, LiveStore liveStore) async {
+    await liveStore.dispose(true);
+    Navigator.of(context).pop(true);
     return Future.value(true);
-//
+
 //    return showDialog(
 //      context: context,
 //      builder: (context) => new AlertDialog(

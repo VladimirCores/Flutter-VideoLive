@@ -52,13 +52,6 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
         print('> \t\t: video track = ${track.kind}');
         await connection.addTrack(track, [_localStream.id]);
       });
-      _localStream.getAudioTracks().forEach((track) async {
-        print('> \t\t: audio track = ${track.kind}');
-        await connection.addTrack(track, [_localStream.id]);
-      });
-      connection.getRemoteStreams().add(_localStream);
-      connection.getLocalStreams().add(_localStream);
-      await connection.addStream(_localStream);
     }
     else {
       sendStatus(LiveStatus.MEDIA_ERROR_NO_STREAM_TO_ADD);
@@ -86,7 +79,6 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
       throw 'MediaRenderer is not initialized';
     }
     sendStatus(LiveStatus.MEDIA_RENDER_STREAM_SET);
-    return Future.value(true);
   }
 
   Future<void> createLocalStreamFromCamera({params}) async {
@@ -95,20 +87,21 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
   }
 
   @override
-  void dispose(manual) {
+  Future<void> dispose(manual) async {
     if (_localStream != null) {
-      _localStream?.dispose();
+      await _localStream?.dispose();
       _localStream = null;
     }
     if (_mediaRenderer != null) {
       try {
         if (_mediaRenderer.src != null) {
-          _mediaRenderer.src.dispose();
+          await _mediaRenderer.src.dispose();
           _mediaRenderer.srcObject = null;
         }
       } catch (e) { }
       _mediaRenderer = null;
     }
-    super.dispose(manual);
+    await super.dispose(manual);
+    return;
   }
 }

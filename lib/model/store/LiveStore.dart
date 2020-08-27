@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:wakelock/wakelock.dart';
 
 import 'package:flutter_videolive/model/store/live/ClientStore.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
@@ -47,7 +48,7 @@ abstract class _LiveStore with Store {
     _mediaStore.listenStatus(_onLiveStatus);
   }
 
-  void initialize(RoomVO room) async
+  Future<void> initialize(RoomVO room) async
   {
     isMaster = room == null;
 
@@ -68,6 +69,10 @@ abstract class _LiveStore with Store {
 
     print('> _roomDocument exists: ${(await _roomDocument.get()).exists}');
 
+    await Wakelock.enable();
+    if (isRoomClosed) return dispose(false);
+    _onLiveStatus(LiveStatus.WAKELOCK_ENABLED);
+
     await _peersStore.initialize(_roomDocument);
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.PEERS_COLLECTION_READY);
@@ -76,16 +81,16 @@ abstract class _LiveStore with Store {
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.MEDIA_RENDERER_READY);
 
-    try {
-      await _mediaStore.createLocalStreamFromCamera();
-    } catch (e) {
-      print('> LiveStore -> createLocalStreamFromCamera error: $e');
-    }
-    if (isRoomClosed) return dispose(false);
-    _onLiveStatus(LiveStatus.MEDIA_LOCAL_STREAM_FROM_CAMERA_READY);
-
     if (isMaster)
     {
+      try {
+        await _mediaStore.createLocalStreamFromCamera();
+      } catch (e) {
+        print('> LiveStore -> createLocalStreamFromCamera error: $e');
+      }
+      if (isRoomClosed) return dispose(false);
+      _onLiveStatus(LiveStatus.MEDIA_LOCAL_STREAM_FROM_CAMERA_READY);
+
       _mediaStore.setMediaRendererStream(_mediaStore.localStream);
       if (isRoomClosed) return dispose(false);
       _onLiveStatus(LiveStatus.MASTER_SET_MEDIA_RENDERER_STREAM);
@@ -99,6 +104,7 @@ abstract class _LiveStore with Store {
       _masterStore.listenStatus(_onLiveStatus);
       _masterStore.onAttachMediaToPeer(_mediaStore.addLocalStreamToPeer);
       await _masterStore.initialize(_peersStore, this.room.id);
+      _onLiveStatus(LiveStatus.MASTER_READY);
     }
     else
     {
@@ -108,12 +114,13 @@ abstract class _LiveStore with Store {
         _clientStore.onAttachMediaToPeer(_mediaStore.addLocalStreamToPeer);
         _clientStore.onMediaArrived(_mediaStore.setMediaRendererStream);
         await _clientStore.initialize(_peersStore, this.room.id);
+        _onLiveStatus(LiveStatus.CLIENT_READY);
       }
       else _onLiveStatus(LiveStatus.CLIENT_ROOM_NOT_EXISTS);
     }
   }
 
-  void dispose(bool isClosed) async {
+  Future<void> dispose(bool isClosed) async {
     if (roomStatus == LiveStatus.CLOSED) return;
     try {
       roomStatus = LiveStatus.CLOSED;
@@ -121,7 +128,7 @@ abstract class _LiveStore with Store {
       _mediaStore.dispose(isClosed);
       if (isMaster) _roomDocument.delete();
       (_clientStore != null && _clientStore.ready)
-          ? _clientStore?.dispose(true)
+          ? await _clientStore?.dispose(true)
           : _clientStore?.closed = true;
       (_masterStore != null && _masterStore.ready)
           ? _masterStore?.dispose(true)
@@ -129,6 +136,7 @@ abstract class _LiveStore with Store {
     } catch (e) {
       print('ERROR on dispose -> $e');
     }
+    _onLiveStatus(LiveStatus.DISPOSED);
     print('>>>>>>>>>>> DISPOSED');
   }
 }

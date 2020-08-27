@@ -26,8 +26,8 @@ class RoomsPage extends StatelessWidget {
             label: Text(hasSelectedRoom ? 'Join' : 'Live'),
             onPressed: () => navigateToLivePage(roomsStore.selectedRoom)
               ..then((_) => roomsStore.clearSelected()),
-            icon: Icon(hasSelectedRoom ? Icons.camera : Icons.camera_enhance),
-            backgroundColor: hasSelectedRoom ? Colors.green : Colors.redAccent,
+            icon: Icon(hasSelectedRoom ? Icons.camera : Icons.camera_alt),
+            backgroundColor: hasSelectedRoom ? Colors.green : Colors.lightBlue,
           );
         }),
         body: Container(

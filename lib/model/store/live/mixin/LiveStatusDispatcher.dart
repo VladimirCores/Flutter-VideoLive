@@ -6,10 +6,13 @@ abstract class LiveStatusDispatcher {
   // ignore: close_sinks
   var _onLiveStatus = StreamController<LiveStatus>();
   get listenStatus => _onLiveStatus.stream.listen;
-  get sendStatus => _onLiveStatus.sink.add;
+  get sendStatus => _onLiveStatus != null
+    ? _onLiveStatus.sink.add
+    : (LiveStatus status) => { print('Can transmit the message $status') };
 
-  void dispose(manual) {
-    _onLiveStatus?.close();
+  Future<void> dispose(manual) async {
+    await _onLiveStatus?.close();
     _onLiveStatus = null;
+    return;
   }
 }

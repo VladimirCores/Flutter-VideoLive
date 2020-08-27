@@ -61,16 +61,15 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
             PeerVO peerVO = await _peersStore.registerMasterPeer(peerID, roomID);
             RTCPeerConnection peerConnection = peerVO.connection;
             if (_isClosed) return dispose(false);
-            sendStatus(LiveStatus.MASTER_PEER_FOR_CLIENT_CREATED);
+            sendStatus(LiveStatus.MASTER_PEER_REGISTERED);
 
             await Future.delayed(Duration(milliseconds: 100));
             _onAttachMediaToPeer.sink.add(peerConnection);
             if (_isClosed) return dispose(false);
             sendStatus(LiveStatus.MEDIA_ATTACHED_TO_PEER);
 
-            peerVO.peerDocumentSubscription = peerDocument
-              .snapshots().listen((DocumentSnapshot snapshot) async
-              {
+            peerVO.peerDocumentSubscription = peerDocument.snapshots().listen(
+              (DocumentSnapshot snapshot) async {
                 if (!snapshot.exists && _peersStore.hasPeer(peerID)) {
                   _peersStore.unregisterAndClosePeer(peerID);
                   peerVO.peerDocumentSubscription.cancel();
@@ -123,14 +122,15 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
   }
 
   @override
-  void dispose(manual) {
+  Future<void> dispose(manual) async {
     sendStatus(LiveStatus.MASTER_DISPOSE);
-    _onAttachMediaToPeer.close();
+    await _onAttachMediaToPeer.close();
     _onAttachMediaToPeer = null;
-    _peersCollectionSubscription?.cancel();
+    await _peersCollectionSubscription?.cancel();
     _peersCollectionSubscription = null;
     _isClosed = true;
-    super.dispose(manual);
+    await super.dispose(manual);
     print('>>>>>>>>>>> MASTER DISPOSED');
+    return;
   }
 }
