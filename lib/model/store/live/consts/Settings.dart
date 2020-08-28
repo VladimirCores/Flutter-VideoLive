@@ -35,7 +35,14 @@ const Map<String, dynamic> ICE_SERVERS = {
       'url': 'turn:numb.viagenie.ca',
       'credential': 'muazkh',
       'username': 'webrtc@live.com'
-    }
+    },
+    // TEST TURN SERVER ON HEROKU - see ./server/turn
+    // {
+    //   'url': 'turn:vast-dawn-37131.herokuapp.com:3478',
+    //   'credential': 'super-hvn-password',
+    //   'username': 'hvn-turn-user'
+    // }
+    // UNPROVEN SERVERS
     // {'url': 'stun:stun.liveo.fr:3478'},
     // {'url': 'stun:stun1.l.google.com:19302'},
     // {'url': 'stun:stun2.l.google.com:19302'},
