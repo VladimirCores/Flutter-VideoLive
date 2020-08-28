@@ -24,10 +24,8 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
   var _onMediaStreamArrived = StreamController<MediaStream>();
   get onMediaArrived => _onMediaStreamArrived.stream.listen;
 
-  bool _isReady = false;
   bool _isClosed = false;
   set closed(bool value) => _isClosed = value;
-  bool get ready => _isReady;
 
   _MasterStore() {
     _isClosed = false;
@@ -45,9 +43,10 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
         final document = peerChange.doc;
         final peerID = document.id;
 
-        print('> peers: change: ${peerChange.type} | peerID: $peerID');
+        print('> MasterStore: change: ${peerChange.type} | peerID: $peerID');
 
         if (peerChange.type == DocumentChangeType.removed) {
+          print('> MasterStore: _peersStore.hasPeer: ${_peersStore.hasPeer(peerID)}');
           if (_peersStore.hasPeer(peerID)) {
             _peersStore.unregisterAndClosePeer(peerID);
             if (_isClosed) return dispose(false);
@@ -63,7 +62,6 @@ abstract class _MasterStore with Store, LiveStatusDispatcher {
             if (_isClosed) return dispose(false);
             sendStatus(LiveStatus.MASTER_PEER_REGISTERED);
 
-            await Future.delayed(Duration(milliseconds: 100));
             _onAttachMediaToPeer.sink.add(peerConnection);
             if (_isClosed) return dispose(false);
             sendStatus(LiveStatus.MEDIA_ATTACHED_TO_PEER);

@@ -39,6 +39,9 @@ abstract class _LiveStore with Store {
   }
 
   @observable
+  bool isRecording = false;
+
+  @observable
   bool isMaster = false;
   bool get isRoomClosed => roomStatus == LiveStatus.CLOSED;
 
@@ -120,6 +123,12 @@ abstract class _LiveStore with Store {
     }
   }
 
+  @action
+  Future<void> recording() async {
+    this.isRecording = !this.isRecording;
+    return;
+  }
+
   Future<void> dispose(bool isClosed) async {
     if (roomStatus == LiveStatus.CLOSED) return;
     try {
@@ -127,12 +136,8 @@ abstract class _LiveStore with Store {
       _peersStore.clean();
       _mediaStore.dispose(isClosed);
       if (isMaster) _roomDocument.delete();
-      (_clientStore != null && _clientStore.ready)
-          ? await _clientStore?.dispose(true)
-          : _clientStore?.closed = true;
-      (_masterStore != null && _masterStore.ready)
-          ? _masterStore?.dispose(true)
-          : _masterStore?.closed = true;
+      await _clientStore?.dispose(true);
+      await _masterStore?.dispose(true);
     } catch (e) {
       print('ERROR on dispose -> $e');
     }

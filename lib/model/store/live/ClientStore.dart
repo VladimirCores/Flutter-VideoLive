@@ -26,10 +26,8 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
   var _onMediaTrackArrived = StreamController<MediaStreamTrack>();
   get onMediaTrackArrived => _onMediaTrackArrived.stream.listen;
 
-  bool _isReady = false;
   bool _isClosed = false;
   set closed(bool value) => _isClosed = value;
-  bool get ready => _isReady;
 
   _ClientStore() {
     _isClosed = false;

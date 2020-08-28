@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:flutter_videolive/components/widgets/LifeCycleWidget.dart';
 import 'package:flutter_videolive/model/store/LiveStore.dart';
 import 'package:flutter_videolive/model/store/live/enum/LiveStatus.dart';
-import 'package:flutter_videolive/model/vo/RoomVO.dart';
 import 'package:flutter_webrtc/rtc_video_view.dart';
 import 'package:provider/provider.dart';
 
 List<Widget> _statusChildren;
 Widget _videoWidget;
 Widget _spinnerWidget = _createSpinner();
+
+Key videoKey = Key('VIDEO_UNIQUE_KEY');
+bool _isICEConnected = false;
 
 class LiveClient extends StatelessWidget {
 
@@ -31,6 +32,11 @@ class LiveClient extends StatelessWidget {
           switch(roomStatus) {
           /****************************/
           /* START -> CONNECTION */
+            case LiveStatus.ROOM_READY:
+              _spinnerWidget = _createSpinner();
+              _videoWidget = null;
+              _isICEConnected = false;
+              break;
             case LiveStatus.PREPARE:
               break;
             case LiveStatus.CLIENT_PEER_CREATED:
@@ -53,22 +59,17 @@ class LiveClient extends StatelessWidget {
             case LiveStatus.ICE_CHECKING:
               break;
             case LiveStatus.ICE_CONNECTED:
-              _spinnerWidget = null;
-              if (liveStore.hasMedia && _videoWidget == null) {
-                _videoWidget = RTCVideoView(liveStore.mediaRenderer);
-              }
+              _isICEConnected = true;
               break;
             case LiveStatus.ICE_COMPLETE:
               break;
             case LiveStatus.ICE_FAILED:
               _spinnerWidget = _createSpinner();
+              _isICEConnected = false;
               _videoWidget = null;
               break;
             case LiveStatus.ICE_DISCONNECTED:
-              Future.delayed(Duration.zero, () async {
-                Navigator.of(ctx).pop(true);
-              });
-              return Container();
+              break;
 
           /* END -> PEER CONNECTION */
           /****************************/
@@ -79,6 +80,17 @@ class LiveClient extends StatelessWidget {
               });
               return Container();
               break;
+          }
+
+          if (liveStore.hasMedia 
+              && _videoWidget == null
+              && _isICEConnected
+          ) {
+            _videoWidget = RTCVideoView(
+                liveStore.mediaRenderer,
+                key: videoKey
+            );
+            _spinnerWidget = null;
           }
 
           _statusChildren.add(_StatusMessage(roomStatus.toString(), _tsMessage));

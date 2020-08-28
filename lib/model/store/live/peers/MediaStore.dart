@@ -47,10 +47,15 @@ abstract class _MediaStore with Store, LiveStatusDispatcher {
     print('> MediaStore -> addStream: hasStream = $hasLocalStream');
     print('> MediaStore -> addStream: connection = $connection');
     if (hasLocalStream) {
+      final localStreamId = [_localStream.id];
       await _localStream.getMediaTracks();
       _localStream.getVideoTracks().forEach((track) async {
-        print('> \t\t: video track = ${track.kind}');
-        await connection.addTrack(track, [_localStream.id]);
+        print('> \t\t: add track = ${track.kind}');
+        await connection.addTrack(track, localStreamId);
+      });
+      _localStream.getAudioTracks().forEach((track) async {
+        print('> \t\t: add track = ${track.kind}');
+        await connection.addTrack(track, localStreamId);
       });
     }
     else {

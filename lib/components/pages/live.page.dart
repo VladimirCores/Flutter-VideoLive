@@ -25,13 +25,9 @@ class LivePage extends StatelessWidget {
     print('STACK CHILDREN: $stackChildren');
     return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
       return Scaffold(
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         floatingActionButton: Observer(builder: (_) {
-          return FloatingActionButton.extended(
-            label: Text(liveStore.isMaster ? 'Stop' : 'Leave'),
-            onPressed: () => _onBackPressed(_, liveStore),
-            icon: Icon(liveStore.isMaster ? Icons.close : Icons.exit_to_app),
-            backgroundColor: Colors.redAccent,
-          );
+          return LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore));
         }),
         body: WillPopScope(
           onWillPop: () => _onBackPressed(ctx, liveStore),
@@ -53,31 +49,34 @@ class LivePage extends StatelessWidget {
     await liveStore.dispose(true);
     Navigator.of(context).pop(true);
     return Future.value(true);
+  }
+}
 
-//    return showDialog(
-//      context: context,
-//      builder: (context) => new AlertDialog(
-//        title: new Text('Are you sure?'),
-//        content: new Text('Do you want to exit an LiveStream'),
-//        actions: <Widget>[
-//          new GestureDetector(
-//            onTap: () async {
-//              Navigator.of(context).pop(false);
-//            },
-//            child: Text("NO"),
-//          ),
-//          SizedBox(height: 16),
-//          new GestureDetector(
-//            onTap: () async {
-//              await liveStore.dispose(true);
-//              Navigator.of(context).pop(true);
-//            },
-//            child: Text("YES"),
-//          ),
-//        ],
-//      ),
-//    ) ??
-//        false;
+class LiveRecordingFloatingButton extends StatelessWidget {
+  final bool isLive;
+  final Function onPressed;
+  LiveRecordingFloatingButton(this.isLive, this.onPressed);
+  @override Widget build(BuildContext context) {
+    return FloatingActionButton.extended(
+      label: Text(isLive ? 'Stop Recording' : 'Start Recording'),
+      onPressed: onPressed,
+      icon: Icon(isLive ? Icons.fiber_manual_record : Icons.save),
+      backgroundColor: isLive ? Colors.redAccent : Colors.green,
+    );
+  }
+}
+
+class LiveJoinFloatingButton extends StatelessWidget {
+  final bool isMaster;
+  final Function onPressed;
+  LiveJoinFloatingButton(this.isMaster, this.onPressed);
+  @override Widget build(BuildContext context) {
+    return FloatingActionButton.extended(
+      label: Text(isMaster ? 'Exit' : 'Leave'),
+      onPressed: onPressed,
+      icon: Icon(isMaster ? Icons.close : Icons.exit_to_app),
+      backgroundColor: Colors.redAccent,
+    );
   }
 }
 

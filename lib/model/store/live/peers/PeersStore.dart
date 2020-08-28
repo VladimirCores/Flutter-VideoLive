@@ -121,7 +121,7 @@ abstract class _PeersStore with Store, LiveStatusDispatcher {
       sendStatus(LiveStatus.RTC_NEGOTIATION_NEEDED);
     };
     peerConnection.onIceConnectionState = (RTCIceConnectionState state) {
-      print('> PeerStore:$peerID -> onIceConnectionState: $state');
+      print('> PeerStore: $peerID -> onIceConnectionState: $state');
       if (state == RTCIceConnectionState.RTCIceConnectionStateFailed) {
         sendStatus(LiveStatus.ICE_FAILED);
       } else if (state == RTCIceConnectionState.RTCIceConnectionStateDisconnected) {

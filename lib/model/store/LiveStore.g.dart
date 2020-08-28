@@ -24,6 +24,21 @@ mixin _$LiveStore on _LiveStore, Store {
     });
   }
 
+  final _$isRecordingAtom = Atom(name: '_LiveStore.isRecording');
+
+  @override
+  bool get isRecording {
+    _$isRecordingAtom.reportRead();
+    return super.isRecording;
+  }
+
+  @override
+  set isRecording(bool value) {
+    _$isRecordingAtom.reportWrite(value, super.isRecording, () {
+      super.isRecording = value;
+    });
+  }
+
   final _$isMasterAtom = Atom(name: '_LiveStore.isMaster');
 
   @override
@@ -37,6 +52,13 @@ mixin _$LiveStore on _LiveStore, Store {
     _$isMasterAtom.reportWrite(value, super.isMaster, () {
       super.isMaster = value;
     });
+  }
+
+  final _$recordingAsyncAction = AsyncAction('_LiveStore.recording');
+
+  @override
+  Future<void> recording() {
+    return _$recordingAsyncAction.run(() => super.recording());
   }
 
   final _$_LiveStoreActionController = ActionController(name: '_LiveStore');
@@ -56,6 +78,7 @@ mixin _$LiveStore on _LiveStore, Store {
   String toString() {
     return '''
 roomStatus: ${roomStatus},
+isRecording: ${isRecording},
 isMaster: ${isMaster}
     ''';
   }
