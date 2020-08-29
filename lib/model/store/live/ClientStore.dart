@@ -6,7 +6,7 @@ import 'package:mobx/mobx.dart';
 import 'mixin/LiveStatusDispatcher.dart';
 import 'enum/LiveStatus.dart';
 
-import 'peers/PeersStore.dart';
+import 'PeersStore.dart';
 
 part 'ClientStore.g.dart';
 

@@ -54,11 +54,11 @@ mixin _$LiveStore on _LiveStore, Store {
     });
   }
 
-  final _$recordingAsyncAction = AsyncAction('_LiveStore.recording');
+  final _$recordAsyncAction = AsyncAction('_LiveStore.record');
 
   @override
-  Future<void> recording() {
-    return _$recordingAsyncAction.run(() => super.recording());
+  Future<void> record() {
+    return _$recordAsyncAction.run(() => super.record());
   }
 
   final _$_LiveStoreActionController = ActionController(name: '_LiveStore');

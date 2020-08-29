@@ -31,6 +31,8 @@ dependencies:
   flutter_mobx:
   mobx:
   provider:
+  path_provider:
+  path:
   uuid:
   camera:
   wakelock:

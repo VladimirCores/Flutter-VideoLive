@@ -5,9 +5,9 @@ import 'package:flutter_videolive/model/store/live/consts/Settings.dart';
 import 'package:flutter_webrtc/webrtc.dart';
 import 'package:mobx/mobx.dart';
 
-import '../mixin/LiveStatusDispatcher.dart';
-import '../enum/LiveStatus.dart';
-import '../../../vo/PeerVO.dart';
+import 'mixin/LiveStatusDispatcher.dart';
+import 'enum/LiveStatus.dart';
+import '../../vo/PeerVO.dart';
 
 part 'PeersStore.g.dart';
 

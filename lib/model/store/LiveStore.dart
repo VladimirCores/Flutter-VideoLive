@@ -8,8 +8,8 @@ import 'package:mobx/mobx.dart';
 
 import 'live/MasterStore.dart';
 import 'live/enum/LiveStatus.dart';
-import 'live/peers/MediaStore.dart';
-import 'live/peers/PeersStore.dart';
+import 'live/MediaStore.dart';
+import 'live/PeersStore.dart';
 
 part 'LiveStore.g.dart';
 
@@ -124,8 +124,14 @@ abstract class _LiveStore with Store {
   }
 
   @action
-  Future<void> recording() async {
+  Future<void> record() async {
     this.isRecording = !this.isRecording;
+
+    if (isRecording)
+      await _mediaStore.startRecording(room.id);
+    else
+      await _mediaStore.stopRecording();
+
     return;
   }
 

@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_videolive/components/widgets/LifeCycleWidget.dart';
 import 'package:flutter_videolive/model/store/LiveStore.dart';
-import 'package:flutter_videolive/model/store/live/enum/LiveStatus.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
-import 'package:flutter_webrtc/rtc_video_view.dart';
 import 'package:provider/provider.dart';
 
 import 'live/live.client.widget.dart';
@@ -15,20 +13,40 @@ class LivePage extends StatelessWidget {
   final RoomVO roomVO;
   LivePage(this.roomVO);
 
-  static const _textStyle_Message = TextStyle(color: Colors.red, fontSize: 13.0);
-  static const _textStyle_UnexpectedError = TextStyle(color: Colors.red, fontSize: 24.0);
-  static const _textStyle_Ready = TextStyle(color: Colors.green, fontSize: 24.0);
-
   @override
   Widget build(BuildContext ctx) {
     List<Widget> stackChildren = [];
     print('STACK CHILDREN: $stackChildren');
     return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
       return Scaffold(
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-        floatingActionButton: Observer(builder: (_) {
-          return LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore));
-        }),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Observer(builder: (_) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: <Widget>[
+                  LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore)),
+                  Container(
+                    decoration: const ShapeDecoration(
+                      color: Color.fromRGBO(255, 255, 255, 0.12),
+                      shape: CircleBorder(),
+                    ),
+                    child: IconButton(
+                      icon: Icon(liveStore.isRecording
+                          ? Icons.fiber_manual_record
+                          : Icons.stop),
+                      color: liveStore.isRecording
+                        ? Colors.green
+                        : Colors.red,
+                      onPressed: () async => await liveStore.record(),
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+          // return LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore));
         body: WillPopScope(
           onWillPop: () => _onBackPressed(ctx, liveStore),
           child: LifeCycleWidget(
@@ -72,23 +90,13 @@ class LiveJoinFloatingButton extends StatelessWidget {
   LiveJoinFloatingButton(this.isMaster, this.onPressed);
   @override Widget build(BuildContext context) {
     return FloatingActionButton.extended(
-      label: Text(isMaster ? 'Exit' : 'Leave'),
+      elevation: 0.0,
+      label: Text(isMaster ? 'Close' : 'Leave',
+        style: TextStyle(color: Colors.red),),
       onPressed: onPressed,
-      icon: Icon(isMaster ? Icons.close : Icons.exit_to_app),
-      backgroundColor: Colors.redAccent,
-    );
-  }
-}
-
-class _StatusMessage extends StatelessWidget {
-  final String message;
-  final TextStyle textStyle;
-  _StatusMessage(this.message, this.textStyle);
-  @override Widget build(BuildContext context) {
-    return ListTile(
-        title: Align(alignment: Alignment.center,
-          child: Text(message, style: textStyle)
-        ),
+      icon: Icon(isMaster ? Icons.close : Icons.exit_to_app,
+        color: Colors.red,),
+      backgroundColor: Colors.white.withOpacity(0.12),
     );
   }
 }
