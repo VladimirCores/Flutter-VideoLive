@@ -31,6 +31,8 @@ class LiveMaster extends StatelessWidget {
             /****************************/
             /* START -> MASTER INITIALIZATION */
             case LiveStatus.PREPARE:
+            case LiveStatus.ROOM_READY:
+              _spinnerWidget = _createSpinner();
               break;
             case LiveStatus.MASTER_CREATED:
               break;

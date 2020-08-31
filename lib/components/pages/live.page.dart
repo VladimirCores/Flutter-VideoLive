@@ -20,32 +20,28 @@ class LivePage extends StatelessWidget {
     return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
       return Scaffold(
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Observer(builder: (_) {
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: <Widget>[
-                  LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore)),
-                  Container(
-                    decoration: const ShapeDecoration(
-                      color: Color.fromRGBO(255, 255, 255, 0.12),
-                      shape: CircleBorder(),
-                    ),
-                    child: IconButton(
-                      icon: Icon(liveStore.isRecording
-                          ? Icons.fiber_manual_record
-                          : Icons.stop),
-                      color: liveStore.isRecording
-                        ? Colors.green
-                        : Colors.red,
-                      onPressed: () async => await liveStore.record(),
-                    ),
+        floatingActionButton: Padding(padding: const EdgeInsets.all(8.0),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Observer(builder: (_) => LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(ctx, liveStore))),
+                Container(
+                  decoration: const ShapeDecoration(
+                    color: Color.fromRGBO(255, 255, 255, 0.12),
+                    shape: CircleBorder(),
                   ),
-                ],
-              );
-            }),
-          ),
+                  child: Observer(builder: (ost) { return  IconButton(
+                    icon: Icon(liveStore.isRecording
+                      ? Icons.fiber_manual_record
+                      : Icons.stop),
+                    color: liveStore.isRecording
+                      ? Colors.green
+                      : Colors.red,
+                    onPressed: () async => await liveStore.record(),
+                  );}),
+                ),
+              ],
+            )
+        ),
           // return LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore));
         body: WillPopScope(
           onWillPop: () => _onBackPressed(ctx, liveStore),

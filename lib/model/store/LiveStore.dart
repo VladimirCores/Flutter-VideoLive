@@ -125,13 +125,13 @@ abstract class _LiveStore with Store {
 
   @action
   Future<void> record() async {
-    this.isRecording = !this.isRecording;
-
-    if (isRecording)
+    print('> LiveStore -> isRecording: $isRecording');
+    if (!isRecording)
       await _mediaStore.startRecording(room.id);
     else
       await _mediaStore.stopRecording();
 
+    isRecording = _mediaStore.isLiveRecording;
     return;
   }
 
