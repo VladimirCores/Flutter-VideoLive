@@ -22,8 +22,9 @@ class LiveMaster extends StatelessWidget {
   @override
   Widget build(BuildContext ctx) {
     List<Widget> stackChildren = [];
+    final size = MediaQuery.of(ctx).size;
     return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
-      return Center(
+      return Container(width: size.width, height: size.height,
         child: Observer(builder: (ost) {
           final roomStatus = liveStore.roomStatus;
           print('< LiveClient: LiveStatus = $roomStatus');
@@ -75,9 +76,12 @@ class LiveMaster extends StatelessWidget {
             /* END -> PEER CONNECTION */
             /****************************/
             /* START -> MASTER CLOSE */
+            case LiveStatus.AGORA_CAMERA_READY:
+              if (_videoWidget == null)
+              _videoWidget = RtcLocalView.SurfaceView();
+              break;
             case LiveStatus.MASTER_READY:
-              _videoWidget = Expanded(child: Container(
-                  child: RtcLocalView.SurfaceView()));
+
               break;
             case LiveStatus.MASTER_DISPOSED:
               _videoWidget = null;

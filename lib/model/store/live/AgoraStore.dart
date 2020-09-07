@@ -5,6 +5,7 @@ import 'package:agora_rtc_engine/rtc_engine.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
 import 'package:flutter_videolive/model/vo/TokenVO.dart';
+import 'package:flutter_videolive/utils/settings.dart';
 import 'package:mobx/mobx.dart';
 
 import 'enum/LiveStatus.dart';
@@ -41,7 +42,8 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
     _engine.setEventHandler(RtcEngineEventHandler(
     cameraReady: () {
       sendStatus(LiveStatus.AGORA_CAMERA_READY);
-    }, error: (code) {
+    }, error: (ErrorCode err) {
+      print('> AgoraStore -> error: ${err.toString()}');
       sendStatus(LiveStatus.AGORA_ERROR);
     }, joinChannelSuccess: (channel, uid, elapsed) {
       sendStatus(LiveStatus.AGORA_JOIN_CHANNEL_SUCCESS);
@@ -61,7 +63,7 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
       tokenVO.value,
       room.id,
       null,
-      0
+      tokenVO.uid
     );
   }
 
@@ -83,6 +85,8 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
   @override
   Future<void> dispose(manual) async {
     sendStatus(LiveStatus.AGORA_DISPOSED);
+    _engine.leaveChannel();
+    _engine.destroy();
     await super.dispose(manual);
     print('>>>>>>>>>>> AGORA DISPOSED');
     return;

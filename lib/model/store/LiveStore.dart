@@ -101,9 +101,13 @@ abstract class _LiveStore with Store {
       if (isRoomClosed) return dispose(false);
       _onLiveStatus(LiveStatus.AGORA_JOIN_THE_ROOM);
 
+      await _roomDocument.set({ 'info': //TODO: Set real user data
+      { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID } });
       await _roomDocument.set({
         'ready': true,
-        'token': _agoraStore.tokenVO.toJSON()
+        'token': _agoraStore.tokenVO.toJSON(),
+        'info': //TODO: Set real user data
+        { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID }
       });
 
       if (isRoomClosed) return dispose(false);
@@ -129,6 +133,7 @@ abstract class _LiveStore with Store {
       if (isMaster) _roomDocument.delete();
       await _clientStore?.dispose(true);
       await _masterStore?.dispose(true);
+      await _agoraStore?.dispose(true);
     } catch (e) {
       print('ERROR on dispose -> $e');
     }

@@ -17,7 +17,7 @@ class RoomsPage extends StatelessWidget {
     final navigateToLivePage = (room)  => Navigator.pushNamed(context, Routes.LIVE_PAGE, arguments: room);
 
     return Consumer<RoomsStore>(builder:
-      (context, roomsStore, _) => Scaffold(
+      (context, RoomsStore roomsStore, _) => Scaffold(
         backgroundColor: Colors.white10,
         floatingActionButton: Observer(builder: (_) {
           final hasSelectedRoom = roomsStore.hasSelectedRoom;

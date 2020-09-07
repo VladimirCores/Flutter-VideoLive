@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:agora_rtc_engine/rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
+import 'package:flutter_videolive/utils/settings.dart';
 import 'package:mobx/mobx.dart';
 
 part 'RoomsStore.g.dart';
@@ -44,13 +46,13 @@ abstract class _RoomsStore with Store {
         print('> RoomsStore: roomsSubscription -> canRoomsBeUpdate: $canRoomsBeUpdate');
         if (canRoomsBeUpdate) {
           // TODO: Replace second param with room title
-          // _onRoomsUpdated(docs.map<RoomVO>((doc) {
-          //   final data = doc.get('info');
-          //   print('> RoomsStore -> room data: $data');
-          //   final isCurrent = data['uid'] == RoomVO.CURRENT_USER_ID;
-          //   return RoomVO(doc.id, APP_ID, 'ID: ' + doc.id,
-          //       ClientRole.Broadcaster, isCurrent: isCurrent);
-          // }).toList());
+          _onRoomsUpdated(docs.map<RoomVO>((doc) {
+            final data = doc.get('info');
+            print('> RoomsStore -> room data: $data');
+            final isCurrent = data['uid'] == RoomVO.CURRENT_USER_ID;
+            return RoomVO(doc.id, APP_ID, 'ID: ' + doc.id,
+                ClientRole.Audience, isCurrent: isCurrent);
+          }).toList());
         }
         _onStatusChanged(RoomsStatus.READY);
       }

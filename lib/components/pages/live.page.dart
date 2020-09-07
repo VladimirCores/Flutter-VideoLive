@@ -38,7 +38,7 @@ class LivePage extends StatelessWidget {
   Future<bool> _onBackPressed(context, LiveStore liveStore) async {
     await liveStore.dispose(true);
     Navigator.of(context).pop(true);
-    return Future.value(true);
+    return true;
   }
 }
 

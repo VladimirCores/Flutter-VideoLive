@@ -71,9 +71,9 @@ class VideoLiveApp extends StatelessWidget {
             return MaterialPageRoute(builder: (context) => page);
           },
           /* SELECT ROOM */
-          // home: RoomsPage()
+          home: RoomsPage()
         /* START STREAM */
-     home: LivePage(null)
+     // home: LivePage(null)
         /* JOIN STREAM (ID must be real) */
 //      home: LivePage(new RoomVO(ROOM_ID, 'ID'))
       );
