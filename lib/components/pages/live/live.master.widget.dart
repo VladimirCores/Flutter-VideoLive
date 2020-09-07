@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_videolive/model/store/LiveStore.dart';
 import 'package:flutter_videolive/model/store/live/enum/LiveStatus.dart';
-import 'package:flutter_webrtc/rtc_video_view.dart';
 import 'package:provider/provider.dart';
+
+import 'package:agora_rtc_engine/rtc_local_view.dart' as RtcLocalView;
 
 List<Widget> _statusChildren;
 Widget _videoWidget;
@@ -21,9 +22,8 @@ class LiveMaster extends StatelessWidget {
   @override
   Widget build(BuildContext ctx) {
     List<Widget> stackChildren = [];
-    final size = MediaQuery.of(ctx).size;
     return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
-      return Container(width: size.width, height: size.height,
+      return Center(
         child: Observer(builder: (ost) {
           final roomStatus = liveStore.roomStatus;
           print('< LiveClient: LiveStatus = $roomStatus');
@@ -42,12 +42,6 @@ class LiveMaster extends StatelessWidget {
               break;
             case LiveStatus.MASTER_READY:
               _spinnerWidget = null;
-              if (liveStore.hasMedia) {
-                _videoWidget = RTCVideoView(
-                  liveStore.mediaRenderer,
-                  key: videoKey
-                );
-              }
               break;
             /* END -> MASTER INITIALIZATION */
             /****************************/
@@ -81,7 +75,11 @@ class LiveMaster extends StatelessWidget {
             /* END -> PEER CONNECTION */
             /****************************/
             /* START -> MASTER CLOSE */
-            case LiveStatus.MASTER_DISPOSE:
+            case LiveStatus.MASTER_READY:
+              _videoWidget = Expanded(child: Container(
+                  child: RtcLocalView.SurfaceView()));
+              break;
+            case LiveStatus.MASTER_DISPOSED:
               _videoWidget = null;
               break;
           }

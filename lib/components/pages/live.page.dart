@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_videolive/components/widgets/LifeCycleWidget.dart';
 import 'package:flutter_videolive/model/store/LiveStore.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
@@ -15,38 +14,15 @@ class LivePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext ctx) {
-    List<Widget> stackChildren = [];
-    print('STACK CHILDREN: $stackChildren');
+    Size viewportSize = MediaQuery.of(ctx).size;
     return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
       return Scaffold(
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: Padding(padding: const EdgeInsets.all(8.0),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Observer(builder: (_) => LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(ctx, liveStore))),
-                Container(
-                  decoration: const ShapeDecoration(
-                    color: Color.fromRGBO(255, 255, 255, 0.12),
-                    shape: CircleBorder(),
-                  ),
-                  child: Observer(builder: (ost) { return  IconButton(
-                    icon: Icon(liveStore.isRecording
-                      ? Icons.fiber_manual_record
-                      : Icons.stop),
-                    color: liveStore.isRecording
-                      ? Colors.green
-                      : Colors.red,
-                    onPressed: () async => await liveStore.record(),
-                  );}),
-                ),
-              ],
-            )
-        ),
-          // return LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore));
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        floatingActionButton: LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore)),
         body: WillPopScope(
           onWillPop: () => _onBackPressed(ctx, liveStore),
           child: LifeCycleWidget(
-            init: () async => await liveStore.initialize(roomVO),
+            init: () async => await liveStore.initialize(roomVO, viewportSize),
             dispose: () async => liveStore.dispose(true),
             builder: (dct, ss) => (
               liveStore.isMaster

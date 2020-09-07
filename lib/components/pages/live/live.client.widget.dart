@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_videolive/model/store/LiveStore.dart';
 import 'package:flutter_videolive/model/store/live/enum/LiveStatus.dart';
-import 'package:flutter_webrtc/rtc_video_view.dart';
 import 'package:provider/provider.dart';
 
 List<Widget> _statusChildren;
@@ -10,7 +9,6 @@ Widget _videoWidget;
 Widget _spinnerWidget = _createSpinner();
 
 Key videoKey = Key('VIDEO_UNIQUE_KEY');
-bool _isICEConnected = false;
 
 class LiveClient extends StatelessWidget {
 
@@ -35,7 +33,6 @@ class LiveClient extends StatelessWidget {
             case LiveStatus.ROOM_READY:
               _spinnerWidget = _createSpinner();
               _videoWidget = null;
-              _isICEConnected = false;
               break;
             case LiveStatus.PREPARE:
               break;
@@ -59,13 +56,11 @@ class LiveClient extends StatelessWidget {
             case LiveStatus.ICE_CHECKING:
               break;
             case LiveStatus.ICE_CONNECTED:
-              _isICEConnected = true;
               break;
             case LiveStatus.ICE_COMPLETE:
               break;
             case LiveStatus.ICE_FAILED:
               _spinnerWidget = _createSpinner();
-              _isICEConnected = false;
               _videoWidget = null;
               break;
             case LiveStatus.ICE_DISCONNECTED:
@@ -82,16 +77,13 @@ class LiveClient extends StatelessWidget {
               break;
           }
 
-          if (liveStore.hasMedia 
-              && _videoWidget == null
-              && _isICEConnected
-          ) {
-            _videoWidget = RTCVideoView(
-                liveStore.mediaRenderer,
-                key: videoKey
-            );
-            _spinnerWidget = null;
-          }
+          // if (liveStore.hasMedia && _videoWidget == null && _isICEConnected) {
+          //   _videoWidget = RTCVideoView(
+          //       liveStore.mediaRenderer,
+          //       key: videoKey
+          //   );
+          //   _spinnerWidget = null;
+          // }
 
           _statusChildren.add(_StatusMessage(roomStatus.toString(), _tsMessage));
 
@@ -109,22 +101,22 @@ class LiveClient extends StatelessWidget {
     });
   }
 
-  Future<void> _onClientDisposed(context) async {
-   return showDialog(
-     context: context,
-     builder: (context) => new AlertDialog(
-       title: new Text('Connection fails'),
-       content: new Text('Streamer closed video.'),
-       actions: <Widget>[
-         FlatButton(
-         onPressed:() async {
-           Navigator.of(context).pop(true);
-         },
-         child: Text("CLOSE")),
-       ],
-     ),
-   );
-  }
+  // Future<void> _onClientDisposed(context) async {
+  //  return showDialog(
+  //    context: context,
+  //    builder: (context) => new AlertDialog(
+  //      title: new Text('Connection fails'),
+  //      content: new Text('Streamer closed video.'),
+  //      actions: <Widget>[
+  //        FlatButton(
+  //        onPressed:() async {
+  //          Navigator.of(context).pop(true);
+  //        },
+  //        child: Text("CLOSE")),
+  //      ],
+  //    ),
+  //  );
+  // }
 }
 
 Widget _createSpinner() {

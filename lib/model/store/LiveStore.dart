@@ -1,14 +1,17 @@
+import 'package:agora_rtc_engine/rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_videolive/utils/settings.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock/wakelock.dart';
 
 import 'package:flutter_videolive/model/store/live/ClientStore.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
-import 'package:flutter_webrtc/webrtc.dart';
 import 'package:mobx/mobx.dart';
 
+import 'live/AgoraStore.dart';
 import 'live/MasterStore.dart';
 import 'live/enum/LiveStatus.dart';
-import 'live/MediaStore.dart';
 import 'live/PeersStore.dart';
 
 part 'LiveStore.g.dart';
@@ -23,12 +26,9 @@ abstract class _LiveStore with Store {
   MasterStore _masterStore;
 
   PeersStore _peersStore = PeersStore();
-  MediaStore _mediaStore = MediaStore();
+  AgoraStore _agoraStore = AgoraStore();
 
-  RoomVO room;
-
-  RTCVideoRenderer get mediaRenderer => _mediaStore.mediaRenderer;
-  bool get hasMedia => _mediaStore.hasMediaRendererStream;
+  RoomVO roomVO;
 
   @observable
   LiveStatus roomStatus;
@@ -48,10 +48,10 @@ abstract class _LiveStore with Store {
   _LiveStore() {
     roomStatus = LiveStatus.INITIAL;
     _peersStore.listenStatus(_onLiveStatus);
-    _mediaStore.listenStatus(_onLiveStatus);
+    _agoraStore.listenStatus(_onLiveStatus);
   }
 
-  Future<void> initialize(RoomVO room) async
+  Future<void> initialize(RoomVO room, Size size) async
   {
     isMaster = room == null;
 
@@ -64,74 +64,60 @@ abstract class _LiveStore with Store {
 
     _onLiveStatus(LiveStatus.PREPARE);
 
+    await [Permission.camera, Permission.microphone, Permission.storage].request();
+    if (isRoomClosed) return dispose(false);
+    _onLiveStatus(LiveStatus.PERMISSIONS_READY);
+
     final _roomsCollection = FirebaseFirestore.instance.collection('rooms');
     _roomDocument = isMaster ? _roomsCollection.doc() : _roomsCollection.doc(room.id);
-    this.room = isMaster ? RoomVO(_roomDocument.id, 'ROOM DATA') : room;
+    this.roomVO = isMaster ? RoomVO(_roomDocument.id, APP_ID,
+        'Room Title', ClientRole.Broadcaster) : room;
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.ROOM_READY);
 
     print('> _roomDocument exists: ${(await _roomDocument.get()).exists}');
 
-    await Wakelock.enable();
-    if (isRoomClosed) return dispose(false);
-    _onLiveStatus(LiveStatus.WAKELOCK_ENABLED);
+    // await Wakelock.enable();
+    // if (isRoomClosed) return dispose(false);
+    // _onLiveStatus(LiveStatus.WAKELOCK_ENABLED);
 
     await _peersStore.initialize(_roomDocument);
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.PEERS_COLLECTION_READY);
 
-    await _mediaStore.initialize();
+    await _agoraStore.initialize(roomVO, size);
     if (isRoomClosed) return dispose(false);
-    _onLiveStatus(LiveStatus.MEDIA_RENDERER_READY);
+    _onLiveStatus(LiveStatus.AGORA_ENGINE_READY);
 
     if (isMaster)
     {
-      try {
-        await _mediaStore.createLocalStreamFromCamera();
-      } catch (e) {
-        print('> LiveStore -> createLocalStreamFromCamera error: $e');
-      }
-      if (isRoomClosed) return dispose(false);
-      _onLiveStatus(LiveStatus.MEDIA_LOCAL_STREAM_FROM_CAMERA_READY);
-
-      _mediaStore.setMediaRendererStream(_mediaStore.localStream);
-      if (isRoomClosed) return dispose(false);
-      _onLiveStatus(LiveStatus.MASTER_SET_MEDIA_RENDERER_STREAM);
-
-      await _roomDocument.set({ 'info': //TODO: Set real user data
-        { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID } });
-      if (isRoomClosed) { dispose(false); return; }
-      _onLiveStatus(LiveStatus.MASTER_REGISTER_ROOM);
-      
       _masterStore = MasterStore();
       _masterStore.listenStatus(_onLiveStatus);
-      _masterStore.onAttachMediaToPeer(_mediaStore.addLocalStreamToPeer);
-      await _masterStore.initialize(_peersStore, this.room.id);
+
+      await _masterStore.initialize(_peersStore, roomVO);
+      await _agoraStore.requestRoomToken(roomVO);
+      await _agoraStore.joinRoom(roomVO);
+
+      if (isRoomClosed) return dispose(false);
+      _onLiveStatus(LiveStatus.AGORA_JOIN_THE_ROOM);
+
+      await _roomDocument.set({
+        'ready': true,
+        'token': _agoraStore.tokenVO.toJSON()
+      });
+
+      if (isRoomClosed) return dispose(false);
       _onLiveStatus(LiveStatus.MASTER_READY);
     }
     else
     {
-      if ((await _roomDocument.get()).exists) {
-        _clientStore = ClientStore();
-        _clientStore.listenStatus(_onLiveStatus);
-        _clientStore.onAttachMediaToPeer(_mediaStore.addLocalStreamToPeer);
-        _clientStore.onMediaArrived(_mediaStore.setMediaRendererStream);
-        await _clientStore.initialize(_peersStore, this.room.id);
-        _onLiveStatus(LiveStatus.CLIENT_READY);
-      }
-      else _onLiveStatus(LiveStatus.CLIENT_ROOM_NOT_EXISTS);
+
     }
   }
 
   @action
   Future<void> record() async {
     print('> LiveStore -> isRecording: $isRecording');
-    if (!isRecording)
-      await _mediaStore.startRecording(room.id);
-    else
-      await _mediaStore.stopRecording();
-
-    isRecording = _mediaStore.isLiveRecording;
     return;
   }
 
@@ -140,7 +126,6 @@ abstract class _LiveStore with Store {
     try {
       roomStatus = LiveStatus.CLOSED;
       _peersStore.clean();
-      _mediaStore.dispose(isClosed);
       if (isMaster) _roomDocument.delete();
       await _clientStore?.dispose(true);
       await _masterStore?.dispose(true);

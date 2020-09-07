@@ -44,12 +44,13 @@ abstract class _RoomsStore with Store {
         print('> RoomsStore: roomsSubscription -> canRoomsBeUpdate: $canRoomsBeUpdate');
         if (canRoomsBeUpdate) {
           // TODO: Replace second param with room title
-          _onRoomsUpdated(docs.map<RoomVO>((doc) {
-            final data = doc.get('info');
-            print('> RoomsStore -> room data: $data');
-            final isCurrent = data['uid'] == RoomVO.CURRENT_USER_ID;
-            return RoomVO(doc.id, 'ID: ' + doc.id, isCurrent: isCurrent);
-          }).toList());
+          // _onRoomsUpdated(docs.map<RoomVO>((doc) {
+          //   final data = doc.get('info');
+          //   print('> RoomsStore -> room data: $data');
+          //   final isCurrent = data['uid'] == RoomVO.CURRENT_USER_ID;
+          //   return RoomVO(doc.id, APP_ID, 'ID: ' + doc.id,
+          //       ClientRole.Broadcaster, isCurrent: isCurrent);
+          // }).toList());
         }
         _onStatusChanged(RoomsStatus.READY);
       }
