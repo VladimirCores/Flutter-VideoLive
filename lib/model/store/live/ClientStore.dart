@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_videolive/model/vo/RoomVO.dart';
 import 'package:mobx/mobx.dart';
 import 'mixin/LiveStatusDispatcher.dart';
 import 'enum/LiveStatus.dart';
@@ -23,17 +24,18 @@ abstract class _ClientStore with Store, LiveStatusDispatcher {
 
   Future<void> initialize(
       PeersStore peersStore,
-      String roomID) async
+      RoomVO roomVO) async
   {
     DocumentReference peerDocument = peersStore.peersCollection.doc();
-    print('> ClientStore -> ======= Join room: $roomID | peerID = ${peerDocument.id}');
+    print('> ClientStore -> ======= Join room: ${roomVO.id} | peerID = ${peerDocument.id}');
 
-    print('> \t0. Create peer');
-    // final peerVO = await peersStore.registerClientPeer(peerDocument.id, roomID);
+    print('> \t0. Create and register peer');
+    await peersStore.registerClientPeer(peerDocument.id, roomVO.id);
     if(_isClosed) return dispose(false);
     sendStatus(LiveStatus.CLIENT_PEER_CREATED);
 
     print('> \t1. Register peer');
+    // TODO: Add real user credentials to the document
     await peerDocument.set({ 'info': { 'name': DateTime.now().toString()}});
 
     if (_isClosed) return dispose(false);

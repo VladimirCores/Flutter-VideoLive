@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:agora_rtc_engine/rtc_engine.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_videolive/model/vo/RoomVO.dart';
 import 'package:flutter_videolive/model/vo/TokenVO.dart';
@@ -19,6 +20,7 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
 
   RtcEngine _engine;
   TokenVO tokenVO;
+  int uid;
 
   _AgoraStore() {
     sendStatus(LiveStatus.AGORA_CREATED);
@@ -26,6 +28,8 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
 
   Future<void> initialize(RoomVO roomVO, Size size) async
   {
+    print('> AgoraStore -> initialize: role = ${roomVO.role}');
+    print('> AgoraStore -> initialize: room = ${roomVO.appId}');
     _engine = await RtcEngine.create(roomVO.appId);
     await _engine.enableVideo();
     await _engine.setChannelProfile(ChannelProfile.LiveBroadcasting);
@@ -46,14 +50,19 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
       print('> AgoraStore -> error: ${err.toString()}');
       sendStatus(LiveStatus.AGORA_ERROR);
     }, joinChannelSuccess: (channel, uid, elapsed) {
+      print('> AgoraStore -> joinChannelSuccess: uid = $uid');
+      print('> AgoraStore -> joinChannelSuccess: channel = $channel');
       sendStatus(LiveStatus.AGORA_JOIN_CHANNEL_SUCCESS);
     }, leaveChannel: (stats) {
       sendStatus(LiveStatus.AGORA_LEAVE_CHANNEL);
     }, userJoined: (uid, elapsed) {
+      this.uid = uid;
+      print('> AgoraStore -> userJoined: uid = $uid');
       sendStatus(LiveStatus.AGORA_USER_JOINED);
     }, userOffline: (uid, elapsed) {
       sendStatus(LiveStatus.AGORA_USER_OFFLINE);
     }, firstRemoteVideoFrame: (uid, width, height, elapsed) {
+      print('> AgoraStore -> firstRemoteVideoFrame: uid = $uid');
       sendStatus(LiveStatus.AGORA_FIRST_REMOTE_VIDEO_FRAME);
     }));
   }
@@ -65,6 +74,26 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
       null,
       tokenVO.uid
     );
+  }
+
+  Future<void> setTokenFromRoomDocument(DocumentReference roomDocument) async {
+    final data = await roomDocument.get().then((value) => value.data());
+    print('> AgoraStore -> setTokenFromRoomDocument data: ${data['token']}');
+    if (data != null && data['token'] != null) {
+      this.tokenVO = TokenVO.fromJSON(data['token']);
+    }
+  }
+  
+  Future<void> announceBroadcastReady(DocumentReference roomDocument) async {
+    await roomDocument.set({
+      'ready': true,
+      'token': tokenVO.toJSON(),
+      'info': //TODO: Set real user data
+      {
+        'name': DateTime.now().toString(), 
+        'uid': RoomVO.CURRENT_USER_ID // TODO: Possible source of bugs - rewrite to use document.id
+      }
+    });
   }
 
   Future<TokenVO> requestRoomToken(RoomVO room) async
@@ -84,9 +113,18 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
 
   @override
   Future<void> dispose(manual) async {
-    sendStatus(LiveStatus.AGORA_DISPOSED);
-    _engine.leaveChannel();
-    _engine.destroy();
+    if (_engine == null) return;
+    await sendStatus(LiveStatus.AGORA_DISPOSED);
+    try {
+      final state = await _engine.getConnectionState();
+      if (state != ConnectionStateType.Disconnected)
+        _engine.leaveChannel();
+
+      _engine.destroy();
+    } catch (e) {
+
+    }
+    _engine = null;
     await super.dispose(manual);
     print('>>>>>>>>>>> AGORA DISPOSED');
     return;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:flutter_videolive/model/store/LiveStore.dart';
 import 'package:flutter_videolive/model/store/live/enum/LiveStatus.dart';
+import 'package:agora_rtc_engine/rtc_remote_view.dart' as RtcRemoteView;
 import 'package:provider/provider.dart';
 
 List<Widget> _statusChildren;
@@ -65,25 +66,26 @@ class LiveClient extends StatelessWidget {
               break;
             case LiveStatus.ICE_DISCONNECTED:
               break;
+            case LiveStatus.AGORA_JOIN_CHANNEL_SUCCESS:
 
+              break;
+            case LiveStatus.AGORA_USER_JOINED:
+              print('> \t\t liveStore.uid = ${liveStore.uid}');
+              if (_videoWidget == null) {
+                _spinnerWidget = null;
+                _videoWidget = RtcRemoteView.SurfaceView(uid: liveStore.uid);
+              }
+              break;
           /* END -> PEER CONNECTION */
           /****************************/
           /* START -> CLIENT CLOSE */
             case LiveStatus.CLIENT_DISPOSED:
-              Future.delayed(Duration.zero, () async {
-                Navigator.of(ctx).pop(true);
-              });
+              // Future.delayed(Duration.zero, () async {
+              //   Navigator.of(ctx).pop(true);
+              // });
               return Container();
               break;
           }
-
-          // if (liveStore.hasMedia && _videoWidget == null && _isICEConnected) {
-          //   _videoWidget = RTCVideoView(
-          //       liveStore.mediaRenderer,
-          //       key: videoKey
-          //   );
-          //   _spinnerWidget = null;
-          // }
 
           _statusChildren.add(_StatusMessage(roomStatus.toString(), _tsMessage));
 
@@ -91,7 +93,9 @@ class LiveClient extends StatelessWidget {
           print('statusChildren: $_statusChildren');
 
           if (_videoWidget != null) stackChildren.add(_videoWidget);
+
           stackChildren.add(ListView(children: _statusChildren));
+
           if (_spinnerWidget != null) stackChildren.add(_spinnerWidget);
 
           return Stack(children: stackChildren);

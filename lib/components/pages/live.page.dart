@@ -18,10 +18,8 @@ class LivePage extends StatelessWidget {
     return Consumer<LiveStore>(builder: (ct, LiveStore liveStore, _) {
       return Scaffold(
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-        floatingActionButton: LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(_, liveStore)),
-        body: WillPopScope(
-          onWillPop: () => _onBackPressed(ctx, liveStore),
-          child: LifeCycleWidget(
+        floatingActionButton: LiveJoinFloatingButton(liveStore.isMaster, () => _onBackPressed(ctx, liveStore)),
+        body: LifeCycleWidget(
             init: () async => await liveStore.initialize(roomVO, viewportSize),
             dispose: () async => liveStore.dispose(true),
             builder: (dct, ss) => (
@@ -30,14 +28,13 @@ class LivePage extends StatelessWidget {
               : LiveClient()
             )
           ),
-        )
       );
     });
   }
 
   Future<bool> _onBackPressed(context, LiveStore liveStore) async {
+    Navigator.pop(context);
     await liveStore.dispose(true);
-    Navigator.of(context).pop(true);
     return true;
   }
 }

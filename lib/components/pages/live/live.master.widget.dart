@@ -78,10 +78,9 @@ class LiveMaster extends StatelessWidget {
             /* START -> MASTER CLOSE */
             case LiveStatus.AGORA_CAMERA_READY:
               if (_videoWidget == null)
-              _videoWidget = RtcLocalView.SurfaceView();
+                _videoWidget = RtcLocalView.SurfaceView();
               break;
             case LiveStatus.MASTER_READY:
-
               break;
             case LiveStatus.MASTER_DISPOSED:
               _videoWidget = null;
@@ -94,7 +93,9 @@ class LiveMaster extends StatelessWidget {
           print('statusChildren: $_statusChildren');
 
           if (_videoWidget != null) stackChildren.add(_videoWidget);
+
           stackChildren.add(ListView(children: _statusChildren));
+
           if (_spinnerWidget != null) stackChildren.add(_spinnerWidget);
 
           return Stack(children: stackChildren);

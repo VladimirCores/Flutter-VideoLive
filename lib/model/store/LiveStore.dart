@@ -1,6 +1,7 @@
 import 'package:agora_rtc_engine/rtc_engine.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_videolive/model/vo/TokenVO.dart';
 import 'package:flutter_videolive/utils/settings.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock/wakelock.dart';
@@ -30,6 +31,8 @@ abstract class _LiveStore with Store {
 
   RoomVO roomVO;
 
+  int get uid => _agoraStore.uid;
+
   @observable
   LiveStatus roomStatus;
   @action void _onLiveStatus(LiveStatus status) {
@@ -51,15 +54,17 @@ abstract class _LiveStore with Store {
     _agoraStore.listenStatus(_onLiveStatus);
   }
 
-  Future<void> initialize(RoomVO room, Size size) async
+  Future<void> initialize(RoomVO roomVO, Size size) async
   {
-    isMaster = room == null;
+    isMaster = roomVO == null;
 
     print('> Master: $isMaster');
 
-    if (_peersStore.isConnected(isMaster ? null : room.id)) {
+    if (_peersStore.isConnected(isMaster ? null : roomVO.id)) {
       _onLiveStatus(LiveStatus.ALREADY_CONNECTED);
       return;
+    } else if (this.roomVO != null) {
+      dispose(false);
     }
 
     _onLiveStatus(LiveStatus.PREPARE);
@@ -69,23 +74,23 @@ abstract class _LiveStore with Store {
     _onLiveStatus(LiveStatus.PERMISSIONS_READY);
 
     final _roomsCollection = FirebaseFirestore.instance.collection('rooms');
-    _roomDocument = isMaster ? _roomsCollection.doc() : _roomsCollection.doc(room.id);
+    _roomDocument = isMaster ? _roomsCollection.doc() : _roomsCollection.doc(roomVO.id);
     this.roomVO = isMaster ? RoomVO(_roomDocument.id, APP_ID,
-        'Room Title', ClientRole.Broadcaster) : room;
+        'Room Title', ClientRole.Broadcaster) : roomVO;
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.ROOM_READY);
 
     print('> _roomDocument exists: ${(await _roomDocument.get()).exists}');
 
-    // await Wakelock.enable();
-    // if (isRoomClosed) return dispose(false);
-    // _onLiveStatus(LiveStatus.WAKELOCK_ENABLED);
+    await Wakelock.enable();
+    if (isRoomClosed) return dispose(false);
+    _onLiveStatus(LiveStatus.WAKELOCK_ENABLED);
 
     await _peersStore.initialize(_roomDocument);
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.PEERS_COLLECTION_READY);
 
-    await _agoraStore.initialize(roomVO, size);
+    await _agoraStore.initialize(this.roomVO, size);
     if (isRoomClosed) return dispose(false);
     _onLiveStatus(LiveStatus.AGORA_ENGINE_READY);
 
@@ -94,28 +99,25 @@ abstract class _LiveStore with Store {
       _masterStore = MasterStore();
       _masterStore.listenStatus(_onLiveStatus);
 
-      await _masterStore.initialize(_peersStore, roomVO);
-      await _agoraStore.requestRoomToken(roomVO);
-      await _agoraStore.joinRoom(roomVO);
+      await _masterStore.initialize(_peersStore, this.roomVO);
+      await _agoraStore.requestRoomToken(this.roomVO);
+      await _agoraStore.joinRoom(this.roomVO);
 
       if (isRoomClosed) return dispose(false);
       _onLiveStatus(LiveStatus.AGORA_JOIN_THE_ROOM);
 
-      await _roomDocument.set({ 'info': //TODO: Set real user data
-      { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID } });
-      await _roomDocument.set({
-        'ready': true,
-        'token': _agoraStore.tokenVO.toJSON(),
-        'info': //TODO: Set real user data
-        { 'name': DateTime.now().toString(), 'uid': RoomVO.CURRENT_USER_ID }
-      });
+      _agoraStore.announceBroadcastReady(_roomDocument);
 
       if (isRoomClosed) return dispose(false);
       _onLiveStatus(LiveStatus.MASTER_READY);
     }
     else
     {
-
+      _clientStore = ClientStore();
+      _clientStore.listenStatus(_onLiveStatus);
+      _clientStore.initialize(_peersStore, this.roomVO);
+      await _agoraStore.setTokenFromRoomDocument(_roomDocument);
+      await _agoraStore.joinRoom(this.roomVO);
     }
   }
 
@@ -137,7 +139,7 @@ abstract class _LiveStore with Store {
     } catch (e) {
       print('ERROR on dispose -> $e');
     }
-    _onLiveStatus(LiveStatus.DISPOSED);
+    if (isClosed) _onLiveStatus(LiveStatus.DISPOSED);
     print('>>>>>>>>>>> DISPOSED');
   }
 }
