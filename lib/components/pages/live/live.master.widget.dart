@@ -77,6 +77,8 @@ class LiveMaster extends StatelessWidget {
             /****************************/
             /* START -> MASTER CLOSE */
             case LiveStatus.AGORA_CAMERA_READY:
+              break;
+            case LiveStatus.AGORA_JOIN_CHANNEL_SUCCESS:
               if (_videoWidget == null)
                 _videoWidget = RtcLocalView.SurfaceView();
               break;

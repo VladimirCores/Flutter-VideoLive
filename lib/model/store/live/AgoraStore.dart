@@ -31,13 +31,14 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
     print('> AgoraStore -> initialize: role = ${roomVO.role}');
     print('> AgoraStore -> initialize: room = ${roomVO.appId}');
     _engine = await RtcEngine.create(roomVO.appId);
-    await _engine.enableVideo();
-    await _engine.setChannelProfile(ChannelProfile.LiveBroadcasting);
-    await _engine.setClientRole(roomVO.role);
-    await _engine.enableWebSdkInteroperability(true);
+    await _engine.enableVideo(); if (_engine == null) return;
+    await _engine.enableAudio(); if (_engine == null) return;
+    await _engine.setChannelProfile(ChannelProfile.LiveBroadcasting); if (_engine == null) return;
+    await _engine.setClientRole(roomVO.role); if (_engine == null) return;
+    await _engine.enableWebSdkInteroperability(true); if (_engine == null) return;
     VideoEncoderConfiguration configuration = VideoEncoderConfiguration();
     configuration.dimensions = VideoDimensions(size.width.toInt(), size.height.toInt());
-    await _engine.setVideoEncoderConfiguration(configuration);
+    await _engine.setVideoEncoderConfiguration(configuration); if (_engine == null) return;
     _addAgoraEventHandlers();
   }
 
@@ -50,6 +51,7 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
       print('> AgoraStore -> error: ${err.toString()}');
       sendStatus(LiveStatus.AGORA_ERROR);
     }, joinChannelSuccess: (channel, uid, elapsed) {
+      this.uid = uid;
       print('> AgoraStore -> joinChannelSuccess: uid = $uid');
       print('> AgoraStore -> joinChannelSuccess: channel = $channel');
       sendStatus(LiveStatus.AGORA_JOIN_CHANNEL_SUCCESS);
@@ -125,7 +127,6 @@ abstract class _AgoraStore with Store, LiveStatusDispatcher {
 
     }
     _engine = null;
-    await super.dispose(manual);
     print('>>>>>>>>>>> AGORA DISPOSED');
     return;
   }

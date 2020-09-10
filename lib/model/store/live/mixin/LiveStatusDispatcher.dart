@@ -8,7 +8,7 @@ abstract class LiveStatusDispatcher {
   get listenStatus => _onLiveStatus.stream.listen;
   get sendStatus => _onLiveStatus != null
     ? _onLiveStatus.sink.add
-    : (LiveStatus status) => { print('Can transmit the message $status') };
+    : (LiveStatus status) => { print('> LiveStatusDispatcher Cant transmit the message $status') };
 
   Future<void> dispose(manual) async {
     await _onLiveStatus?.close();
