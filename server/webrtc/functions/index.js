@@ -2,8 +2,8 @@ const functions = require('firebase-functions');
 var { RtcTokenBuilder, RtcRole } = require('agora-access-token')
 const AXIOS = require('axios');
 
-var APP_ID = "45aab4df3c18460298e749ed2a9aa869";
-var APP_CERTIFICATE = "d73bc8addca545348b24348b907f7ec6";
+var APP_ID = "";
+var APP_CERTIFICATE = "";
 
 const CLOUD_RECORDING_REQUEST = AXIOS.create({
   baseURL: `https://api.agora.io/v1/apps/${APP_ID}/cloud_recording`,
@@ -11,8 +11,8 @@ const CLOUD_RECORDING_REQUEST = AXIOS.create({
     'Content-Type': 'application/json;charset=utf-8'
   },
   auth: {
-    username: 'e6fb143a78fe4137ae2d9c6fa9de00c5',
-    password: '0df3ba4ac1f54762b2ad0017ff73d7b9'
+    username: '',
+    password: ''
   }
 });
 const MODE = 'mix';
